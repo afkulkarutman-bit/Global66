@@ -23,6 +23,18 @@
 # misc
 .DS_Store
 *.pem
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+data/*.json
+!public/templates/PlantillaBeneficiarios_Peru.xlsm
+!data/previous-reference-april-2026.json
 
 # debug
 npm-debug.log*

@@ -1,26 +1,113 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --g66-blue: #3b3edb;
+  --g66-blue-dark: #2d30b8;
+  --g66-blue-light: #eef0ff;
+  --g66-blue-mid: #c7c9f7;
+  --g66-bg: #f5f6fa;
+  --g66-white: #ffffff;
+  --g66-card: #ffffff;
+  --g66-border: #e5e7eb;
+  --g66-border-dark: #d1d5db;
+  --g66-text: #111827;
+  --g66-text2: #374151;
+  --g66-muted: #6b7280;
+  --g66-red: #dc2626;
+  --g66-red-bg: #fef2f2;
+  --g66-red-border: #fecaca;
+  --g66-green: #16a34a;
+  --g66-green-bg: #f0fdf4;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--g66-bg);
+  color: var(--g66-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
+
+.g66-card {
+  background-color: var(--g66-card);
+  border: 1px solid var(--g66-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.g66-input {
+  background-color: var(--g66-white);
+  border: 1px solid var(--g66-border-dark);
+  border-radius: 8px;
+  color: var(--g66-text);
+  padding: 8px 12px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  font-size: 14px;
+}
+.g66-input:focus {
+  border-color: var(--g66-blue);
+  box-shadow: 0 0 0 3px rgba(59,62,219,0.12);
+}
+.g66-input option { background: #fff; color: var(--g66-text); }
+
+.g66-btn {
+  background-color: var(--g66-blue);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.15s, box-shadow 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(59,62,219,0.3);
+}
+.g66-btn:hover { background-color: var(--g66-blue-dark); }
+.g66-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.g66-btn-ghost {
+  background: transparent;
+  color: var(--g66-text2);
+  border: 1px solid var(--g66-border-dark);
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.g66-btn-ghost:hover { background-color: var(--g66-bg); }
+
+.badge-active {
+  background-color: var(--g66-green-bg);
+  color: var(--g66-green);
+  border: 1px solid #bbf7d0;
+  border-radius: 20px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge-inactive {
+  background-color: var(--g66-red-bg);
+  color: var(--g66-red);
+  border: 1px solid var(--g66-red-border);
+  border-radius: 20px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.row-hover:hover { background-color: #f8f8ff; cursor: pointer; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--g66-bg); }
+::-webkit-scrollbar-thumb { background: var(--g66-border-dark); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
