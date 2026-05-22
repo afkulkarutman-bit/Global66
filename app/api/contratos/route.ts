@@ -161,7 +161,7 @@ export async function POST(req: NextRequest) {
     const buffer = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
     const filename = `Contrato_${(empleado.nombre ?? 'empleado').replace(/\s+/g, '_')}.docx`;
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'Content-Disposition': `attachment; filename="${filename}"`,
