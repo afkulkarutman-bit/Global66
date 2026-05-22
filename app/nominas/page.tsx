@@ -4519,15 +4519,15 @@ Revisá los TDC, alertas de empleados sin configurar, y si el total parece razon
               {empSearchResults.length > 0 && (
                 <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid var(--g66-border)", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 300, maxHeight: 220, overflowY: "auto" }}>
                   {empSearchResults.map((emp, i) => (
-                    <button key={i} onClick={() => !emp.already_in_period && selectEmpFromSearch(emp)}
+                    <button key={i} onClick={() => !Boolean(emp.already_in_period) && selectEmpFromSearch(emp)}
                       disabled={Boolean(emp.already_in_period)}
-                      style={{ width: "100%", display: "block", textAlign: "left", padding: "9px 14px", background: "none", border: "none", borderBottom: "1px solid var(--g66-border)", cursor: emp.already_in_period ? "not-allowed" : "pointer", fontSize: 13, opacity: emp.already_in_period ? 0.55 : 1 }}
+                      style={{ width: "100%", display: "block", textAlign: "left", padding: "9px 14px", background: "none", border: "none", borderBottom: "1px solid var(--g66-border)", cursor: Boolean(emp.already_in_period) ? "not-allowed" : "pointer", fontSize: 13, opacity: Boolean(emp.already_in_period) ? 0.55 : 1 }}
                       onMouseEnter={e => (e.currentTarget.style.background = "var(--g66-blue-light)")}
                       onMouseLeave={e => (e.currentTarget.style.background = "none")}
                     >
                       <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
                         <span>{String(emp.nombre)}</span>
-                        {emp.already_in_period && <span style={{ fontSize: 10, color: "#92400e", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 999, padding: "1px 6px" }}>Ya está</span>}
+                        {Boolean(emp.already_in_period) && <span style={{ fontSize: 10, color: "#92400e", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 999, padding: "1px 6px" }}>Ya está</span>}
                         {emp.activo === 0 && <span style={{ fontSize: 10, color: "#991b1b", background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 999, padding: "1px 6px" }}>Inactivo</span>}
                       </div>
                       <div style={{ fontSize: 11, color: "var(--g66-muted)" }}>
