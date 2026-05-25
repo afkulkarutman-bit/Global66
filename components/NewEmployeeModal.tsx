@@ -91,7 +91,27 @@ export default function NewEmployeeModal({ onClose, onCreate }: {
             <div style={{ fontWeight: 700, fontSize: 18 }}>Nuevo Empleado</div>
             <div style={{ fontSize: 12, color: "var(--g66-muted)" }}>Completar los datos del nuevo ingreso</div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--g66-muted)", fontSize: 20, cursor: "pointer", lineHeight: 1, padding: 4 }}>✕</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <a
+              href="/respuesta-formulario"
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                border: "1px solid var(--g66-blue-mid)",
+                background: "var(--g66-blue-light)",
+                color: "var(--g66-blue)",
+                borderRadius: 8,
+                padding: "7px 10px",
+                fontSize: 12,
+                fontWeight: 800,
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Ver respuestas formulario
+            </a>
+            <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--g66-muted)", fontSize: 20, cursor: "pointer", lineHeight: 1, padding: 4 }}>✕</button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} style={{ overflow: "hidden", display: "flex", flexDirection: "column", flex: 1 }}>
