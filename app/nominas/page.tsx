@@ -686,7 +686,7 @@ export default function NominasPage() {
     setBoletaLoading(true);
     setBoletaError("");
     try {
-      const res = await fetch("/api/nominas/boletas/responses", { cache: "no-store" });
+      const res = await fetch(`/api/nominas/boletas/responses${selected?.mes ? `?mes=${encodeURIComponent(selected.mes)}` : ""}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok || data?.ok === false) {
         throw new Error(data?.error || "No se pudo leer el Google Sheet de boletas.");

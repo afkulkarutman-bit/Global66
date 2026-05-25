@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   const scriptUrl = process.env.BOLETAS_APPS_SCRIPT_URL;
   const token = process.env.BOLETAS_APPS_SCRIPT_TOKEN;
 
@@ -16,6 +16,9 @@ export async function GET() {
   try {
     const url = new URL(scriptUrl);
     url.searchParams.set("token", token);
+    const requestUrl = new URL(request.url);
+    const mes = requestUrl.searchParams.get("mes");
+    if (mes) url.searchParams.set("mes", mes);
 
     const response = await fetch(url.toString(), { cache: "no-store" });
     const text = await response.text();
