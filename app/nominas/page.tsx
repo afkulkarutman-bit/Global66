@@ -443,8 +443,6 @@ export default function NominasPage() {
   const commissionSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [uploadStatus, setUploadStatus] = useState<{ CX?: string; B2B?: string }>({});
   const [uploadPreview, setUploadPreview] = useState<{ CX?: { sheet: string; usedHeaders: boolean; rows: Record<string, unknown>[] }; B2B?: { sheet: string; usedHeaders: boolean; rows: Record<string, unknown>[] } }>({});
-  const [geminiCheck, setGeminiCheck] = useState<string | null>(null);
-  const [checkingGemini, setCheckingGemini] = useState(false);
   const [editingRow, setEditingRow] = useState<CalcRow | null>(null);
   const [editNovedades, setEditNovedades] = useState({ dias_descuento: 0, horas_extra: 0, otros_ingresos: 0, asegurado: 0, descuento_boutique: 0, otros_descuentos: 0, fecha_termino: "" });
   const [showAddEmp, setShowAddEmp] = useState(false);
@@ -489,7 +487,6 @@ export default function NominasPage() {
     const data = await res.json();
     setSelected(data);
     setEditParams(data.payroll_params ?? []);
-    setGeminiCheck(null);
     setUploadStatus({});
     setUploadPreview({});
     const [empRes, comRes, salaryRes, previousReferenceRes] = await Promise.all([
@@ -1631,50 +1628,6 @@ export default function NominasPage() {
     printWindow.document.close();
   };
 
-  const runGeminiCheck = async () => {
-    if (!selected || employees.length === 0) return;
-    setCheckingGemini(true);
-    setGeminiCheck(null);
-    const rows = employees.map(e => calcRow(e, selected, editParams, commissions));
-    const totalUSD = rows.reduce((s, r) => s + r.sueldo_neto_usd, 0);
-    const byCountry = rows.reduce((acc, r) => { const k = r.pais ?? 'N/A'; acc[k] = (acc[k] || 0) + r.sueldo_neto_usd; return acc; }, {} as Record<string, number>);
-    const argRows = rows.filter(r => r.es_argentina);
-    const sinArs = argRows.filter(r => r.monto_ars_usd === 0);
-
-    const prompt = `Eres el asistente de HR de Global66. Revisá este resumen de nómina de servicios y detectá alertas.
-
-PERÍODO: ${formatMes(selected.mes)} (${selected.fecha_inicio} al ${selected.fecha_fin})
-
-PARÁMETROS:
-${editParams.map(p => `- ${p.moneda}: TDC=${p.tdc_usd}, Retención=${(p.retencion * 100).toFixed(2)}%`).join("\n")}
-
-RESUMEN:
-- Total empleados: ${rows.length}
-- Argentina: ${argRows.length} personas (${argRows.filter(r => r.monto_ars_usd > 0).length} con split ARS/USD configurado)
-- Total nómina: USD ${fmt(totalUSD)}
-- Por país (USD): ${Object.entries(byCountry).map(([k, v]) => `${k}=${fmt(v)}`).join(", ")}
-
-COMISIONES: CX=${commissions.filter(c => c.tipo === "CX").length} personas, B2B=${commissions.filter(c => c.tipo === "B2B").length} personas
-
-POSIBLES ALERTAS:
-${sinArs.length > 0 ? `- ${sinArs.length} argentinos sin monto ARS configurado: ${sinArs.slice(0,5).map(r=>r.nombre).join(", ")}` : ""}
-${rows.filter(r => r.dias_neto <= 0).map(r => `- ${r.nombre}: días neto = ${r.dias_neto.toFixed(1)}`).join("\n")}
-${rows.filter(r => r.sueldo_neto_usd < 0).map(r => `- ${r.nombre}: sueldo neto negativo`).join("\n")}
-
-Revisá los TDC, alertas de empleados sin configurar, y si el total parece razonable. Respondé en español con bullets concisos.`;
-
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: prompt, history: [] }),
-      });
-      const data = await res.json();
-      setGeminiCheck(data.text || data.error || JSON.stringify(data));
-    } catch { setGeminiCheck("Error al conectar con el asistente."); }
-    setCheckingGemini(false);
-  };
-
   const calcRows = selected ? employees.map(e => calcRow(e, selected, editParams, commissions)) : [];
   const previousCalcRows = previousPayroll
     ? previousPayroll.employees.map(e => calcRow(e, previousPayroll.period, previousPayroll.params, previousPayroll.commissions))
@@ -2367,9 +2320,6 @@ Revisá los TDC, alertas de empleados sin configurar, y si el total parece razon
                     {generating ? "Actualizando..." : "↺ Regenerar"}
                   </button>
                 )}
-                <button onClick={runGeminiCheck} disabled={checkingGemini || employees.length === 0} style={{ background: checkingGemini || employees.length === 0 ? "var(--g66-border)" : "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 600, fontSize: 13, cursor: checkingGemini || employees.length === 0 ? "default" : "pointer" }}>
-                  {checkingGemini ? "Analizando..." : "✦ Check Gemini"}
-                </button>
               </div>
             </div>
 
@@ -2387,14 +2337,6 @@ Revisá los TDC, alertas de empleados sin configurar, y si el total parece razon
                   ))}
                 </div>
                 <button onClick={() => setGenerateInfo(null)} style={{ marginTop: 6, background: "none", border: "none", fontSize: 11, color: "#c2410c", cursor: "pointer", padding: 0 }}>Cerrar</button>
-              </div>
-            )}
-
-            {/* Gemini result */}
-            {geminiCheck && (
-              <div style={{ background: "#f5f3ff", border: "1px solid #c4b5fd", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
-                <div style={{ fontWeight: 700, fontSize: 12, color: "#6d28d9", marginBottom: 6 }}>✦ Análisis Gemini</div>
-                <div style={{ fontSize: 13, color: "#374151", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{geminiCheck}</div>
               </div>
             )}
 
