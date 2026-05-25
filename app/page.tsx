@@ -302,7 +302,7 @@ export default function Home() {
                   <a href="/contratos" style={{ display: "block", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", textDecoration: "none", borderBottom: "1px solid var(--g66-border)" }}
                     onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
                     onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
-                    Contratos
+                    ⚙️ Contratos
                   </a>
                   <a href="/certificados" style={{ display: "block", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", textDecoration: "none", borderBottom: "1px solid var(--g66-border)" }}
                     onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
@@ -322,12 +322,12 @@ export default function Home() {
                   <a href="/status-ingresos" style={{ display: "block", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", textDecoration: "none", borderBottom: "1px solid var(--g66-border)" }}
                     onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
                     onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
-                    Status Ingresos
+                    ⚙️ Status Ingresos
                   </a>
                   <a href="/licencias-medicas" style={{ display: "block", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", textDecoration: "none", borderBottom: "1px solid var(--g66-border)" }}
                     onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
                     onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
-                    Licencias Médicas
+                    ⚙️ Licencias Médicas
                   </a>
                   <a href="/onboarding" target="_blank" style={{ display: "block", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", textDecoration: "none", borderBottom: "1px solid var(--g66-border)" }}
                     onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
