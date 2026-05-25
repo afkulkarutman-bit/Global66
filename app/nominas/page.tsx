@@ -4569,7 +4569,7 @@ export default function NominasPage() {
                         onClick={() => setShowCross(v => !v)}
                         style={{ border: "none", background: showCross ? "#059669" : "#0f172a", color: "#fff", borderRadius: 8, padding: "10px 14px", fontWeight: 800, cursor: "pointer" }}
                       >
-                        {showCross ? "Ocultar cruce" : "Cruzar con nómina"}
+                        {showCross ? "Ocultar cruce preliminar" : "Cruce preliminar"}
                       </button>
                     )}
                   </div>
@@ -4604,7 +4604,7 @@ export default function NominasPage() {
                 {geminiReport.length > 0 && (
                   <div style={{ marginBottom: 24 }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: "var(--g66-text)", marginBottom: 10 }}>
-                      Reporte Gemini — lo que cada persona puso en su boleta
+                      Reporte Gemini — monto y fecha leídos desde cada PDF
                     </div>
                     <div style={{ overflowX: "auto", border: "1px solid var(--g66-border)", borderRadius: 10 }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -4639,7 +4639,7 @@ export default function NominasPage() {
                 {showCross && geminiReport.length > 0 && (
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: "var(--g66-text)", marginBottom: 10 }}>
-                      Cruce con nómina — {formatMes(selected?.mes ?? "")}
+                      Cruce preliminar con nómina — {formatMes(selected?.mes ?? "")}
                     </div>
 
                     {/* Summary cards */}

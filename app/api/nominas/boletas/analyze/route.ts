@@ -46,11 +46,16 @@ async function analyzeWithGemini(pdfBase64: string): Promise<{ nombre: string | 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY no configurada");
 
-  const prompt = `Eres un asistente de RRHH. Analiza esta boleta/factura de honorarios y extrae:
-1. El nombre completo de quien emite la boleta (prestador de servicios).
-2. El monto total a pagar (número sin signos ni separadores de miles). Busca el total neto, monto líquido o valor a pagar.
-3. La moneda (USD, ARS, CLP, COP, PEN, etc.).
-4. La fecha de emisión de la boleta (formato YYYY-MM-DD).
+  const prompt = `Eres un auditor de RRHH revisando boletas/facturas de honorarios para Global66.
+Extrae SOLO datos del EMISOR/PRESTADOR de la boleta, es decir, la persona o proveedor que cobra.
+NO uses como nombre a Global66, Global 66, Global81, Global 81, Global Card ni empresas relacionadas: esas suelen ser receptor/cliente/razon social receptora.
+Si el documento tiene secciones como receptor, cliente, destinatario, señor(es), empresa o pagador, IGNORA esos datos para el nombre.
+
+Extrae:
+1. nombre: nombre completo del emisor/prestador/persona que factura/cobra. Si no se distingue, null.
+2. monto: monto total liquido/neto/a pagar de la boleta, como numero sin signos ni separadores.
+3. moneda: codigo ISO de 3 letras. Usa CLP para pesos chilenos, COP para pesos colombianos, ARS para pesos argentinos, PEN para soles, USD para dolares, EUR para euros.
+4. fecha: fecha de emision del documento en formato YYYY-MM-DD.
 
 Responde SOLO con JSON válido, sin texto adicional:
 {"nombre": "<nombre completo o null>", "monto": <número o null>, "moneda": "<moneda o null>", "fecha": "<YYYY-MM-DD o null>"}`;
@@ -78,16 +83,33 @@ Responde SOLO con JSON válido, sin texto adicional:
   }
 
   const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  const text = (data.candidates?.[0]?.content?.parts ?? [])
+    .map((part: { text?: string }) => part.text ?? "")
+    .join("");
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error(`Gemini no devolvió JSON válido: ${text.slice(0, 200)}`);
 
   try {
     const parsed = JSON.parse(jsonMatch[0]);
+    const rawMoneda = typeof parsed.moneda === "string" && parsed.moneda !== "null" ? parsed.moneda.toUpperCase() : null;
+    const monedaMap: Record<string, string> = {
+      PESOS: "CLP",
+      PESO: "CLP",
+      "PESOS CHILENOS": "CLP",
+      "PESO CHILENO": "CLP",
+      "PESOS COLOMBIANOS": "COP",
+      "PESO COLOMBIANO": "COP",
+      "PESOS ARGENTINOS": "ARS",
+      "PESO ARGENTINO": "ARS",
+      SOLES: "PEN",
+      SOL: "PEN",
+      DOLARES: "USD",
+      DOLAR: "USD",
+    };
     return {
       nombre: typeof parsed.nombre === "string" && parsed.nombre !== "null" ? parsed.nombre : null,
       monto: typeof parsed.monto === "number" ? parsed.monto : null,
-      moneda: typeof parsed.moneda === "string" && parsed.moneda !== "null" ? parsed.moneda.toUpperCase() : null,
+      moneda: rawMoneda ? (monedaMap[rawMoneda] ?? rawMoneda) : null,
       fecha: typeof parsed.fecha === "string" && parsed.fecha !== "null" ? parsed.fecha : null,
     };
   } catch {
