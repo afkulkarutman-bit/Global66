@@ -50,6 +50,32 @@ type PayrollSalaryChange = {
 };
 type CommissionType = "CX" | "B2B";
 type ManualCommissionDraft = { dni: string; nombre: string; monto_bruto: string; moneda: string; mes: string };
+type BoletaResponseRow = Record<string, unknown> & { __rowNumber?: number };
+type BoletaCheckStatus = "ok" | "sin_respuesta" | "monto_distinto" | "fecha_distinta" | "duplicado" | "sin_match" | "sin_monto" | "sin_fecha";
+type BoletaCheckRow = {
+  status: BoletaCheckStatus;
+  severity: "ok" | "warning" | "error";
+  dni: string;
+  nombre: string;
+  pais: string;
+  moneda: string;
+  expectedAmount: number;
+  responseAmount: number | null;
+  responseDate: string | null;
+  responseName: string;
+  rowNumber?: number;
+  reasons: string[];
+};
+type BoletaExpectedRow = {
+  key: string;
+  dni: string;
+  normalizedDni: string;
+  normalizedName: string;
+  nombre: string;
+  pais: string;
+  moneda: string;
+  expectedAmount: number;
+};
 type PayrollExportScope = "sin_arg" | "argentina";
 type PayrollEditableField = keyof Pick<PayrollEmployee,
   "dias_descuento" | "horas_extra" | "otros_ingresos" | "descuento_boutique" | "otros_descuentos" |
@@ -157,6 +183,92 @@ function parseDecimalInput(value: string) {
   const normalized = trimmed.includes(",") ? trimmed.replace(/\./g, "").replace(",", ".") : trimmed;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizePlain(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function normalizeDoc(value: unknown) {
+  return String(value ?? "").replace(/[^0-9kK]/g, "").toUpperCase();
+}
+
+function normalizePersonName(value: unknown) {
+  return normalizePlain(value)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .sort()
+    .join(" ");
+}
+
+function parseMoneyValue(value: unknown): number | null {
+  const raw = String(value ?? "").trim();
+  if (!raw || raw === "-" || raw.toLowerCase() === "n/a") return null;
+  const cleaned = raw.replace(/[^\d,.-]/g, "");
+  if (!cleaned) return null;
+  const commaCount = (cleaned.match(/,/g) ?? []).length;
+  const dotCount = (cleaned.match(/\./g) ?? []).length;
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
+  const normalized = commaCount > 0 && dotCount > 0
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : commaCount > 0
+      ? (commaCount > 1 || cleaned.length - lastComma - 1 === 3 ? cleaned.replace(/,/g, "") : cleaned.replace(",", "."))
+      : dotCount > 0
+        ? (dotCount > 1 || cleaned.length - lastDot - 1 === 3 ? cleaned.replace(/\./g, "") : cleaned)
+        : cleaned;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseFlexibleDate(value: unknown): string | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const iso = raw.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (iso) {
+    const [, y, m, d] = iso;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  const latam = raw.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
+  if (latam) {
+    const [, d, m, year] = latam;
+    const y = year.length === 2 ? `20${year}` : year;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+}
+
+function findFieldValue(row: BoletaResponseRow, candidates: string[]) {
+  const entries = Object.entries(row);
+  for (const candidate of candidates) {
+    const normalizedCandidate = normalizePlain(candidate);
+    const exact = entries.find(([key]) => normalizePlain(key) === normalizedCandidate);
+    if (exact) return exact[1];
+  }
+  for (const candidate of candidates) {
+    const normalizedCandidate = normalizePlain(candidate);
+    const partial = entries.find(([key]) => normalizePlain(key).includes(normalizedCandidate));
+    if (partial) return partial[1];
+  }
+  return "";
+}
+
+function normalizeCurrency(value: unknown) {
+  const raw = normalizePlain(value);
+  if (!raw) return "";
+  if (raw.includes("usd") || raw.includes("dolar")) return "USD";
+  if (raw.includes("ars") || raw.includes("argent")) return "ARS";
+  if (raw.includes("cop") || raw.includes("colomb")) return "COP";
+  if (raw.includes("clp") || raw.includes("chile")) return "CLP";
+  if (raw.includes("pen") || raw.includes("sol")) return "PEN";
+  if (raw.includes("eur") || raw.includes("euro")) return "EUR";
+  return raw.toUpperCase();
 }
 
 function monthNumberSinceIngreso(fechaIngreso: string | null, period: PayrollPeriod): number | null {
@@ -470,6 +582,11 @@ export default function NominasPage() {
   const [salaryHistoryDrafts, setSalaryHistoryDrafts] = useState<Record<string, { newBase: string; comment: string }>>({});
   const [savingSalaryHistoryId, setSavingSalaryHistoryId] = useState("");
   const [savingSalaryRaise, setSavingSalaryRaise] = useState(false);
+  const [boletaRows, setBoletaRows] = useState<BoletaResponseRow[]>([]);
+  const [boletaHeaders, setBoletaHeaders] = useState<string[]>([]);
+  const [boletaSheetName, setBoletaSheetName] = useState("");
+  const [boletaLoading, setBoletaLoading] = useState(false);
+  const [boletaError, setBoletaError] = useState("");
   const cxRef = useRef<HTMLInputElement>(null);
   const b2bRef = useRef<HTMLInputElement>(null);
 
@@ -564,6 +681,28 @@ export default function NominasPage() {
       });
     return () => { cancelled = true; };
   }, [selected?.id, selected?.mes, previousReference.length]);
+
+  const loadBoletaResponses = async () => {
+    setBoletaLoading(true);
+    setBoletaError("");
+    try {
+      const res = await fetch("/api/nominas/boletas/responses", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || "No se pudo leer el Google Sheet de boletas.");
+      }
+      setBoletaRows(Array.isArray(data?.rows) ? data.rows : []);
+      setBoletaHeaders(Array.isArray(data?.headers) ? data.headers : []);
+      setBoletaSheetName(String(data?.sheetName ?? ""));
+    } catch (error) {
+      setBoletaRows([]);
+      setBoletaHeaders([]);
+      setBoletaSheetName("");
+      setBoletaError(error instanceof Error ? error.message : "No se pudo leer el Google Sheet de boletas.");
+    } finally {
+      setBoletaLoading(false);
+    }
+  };
 
   const deletePeriod = async (period: PayrollPeriod) => {
     if (!confirm(`¿Eliminar el borrador de ${formatMes(period.mes)}? Esta acción no se puede deshacer.`)) return;
@@ -1637,6 +1776,163 @@ export default function NominasPage() {
   const sinArgRows = calcRows.filter(r => !r.es_argentina);
   const argCalcRows = calcRows.filter(r => r.es_argentina);
   const argEmployees = employees.filter(e => e.es_argentina);
+  const boletaExpectedRows: BoletaExpectedRow[] = calcRows.flatMap(r => {
+    if (r.sueldo_neto_local <= 0) return [];
+    if (r.es_argentina) {
+      return [
+        { key: `${r.id}:USD`, dni: r.dni, normalizedDni: normalizeDoc(r.dni), normalizedName: normalizePersonName(r.nombre), nombre: r.nombre, pais: r.pais ?? "", moneda: "USD", expectedAmount: r.pago_usd },
+        { key: `${r.id}:ARS`, dni: r.dni, normalizedDni: normalizeDoc(r.dni), normalizedName: normalizePersonName(r.nombre), nombre: r.nombre, pais: r.pais ?? "", moneda: "ARS", expectedAmount: r.pago_ars_local },
+      ].filter(item => item.expectedAmount > 0.5);
+    }
+    return [{
+      key: `${r.id}:${r.moneda}`,
+      dni: r.dni,
+      normalizedDni: normalizeDoc(r.dni),
+      normalizedName: normalizePersonName(r.nombre),
+      nombre: r.nombre,
+      pais: r.pais ?? "",
+      moneda: r.moneda,
+      expectedAmount: r.sueldo_neto_local,
+    }];
+  });
+  const boletaExpectedByDni = new Map<string, BoletaExpectedRow[]>();
+  const boletaExpectedByName = new Map<string, BoletaExpectedRow[]>();
+  boletaExpectedRows.forEach(row => {
+    if (row.normalizedDni) boletaExpectedByDni.set(row.normalizedDni, [...(boletaExpectedByDni.get(row.normalizedDni) ?? []), row]);
+    if (row.normalizedName) boletaExpectedByName.set(row.normalizedName, [...(boletaExpectedByName.get(row.normalizedName) ?? []), row]);
+  });
+  const boletaResponseData = boletaRows.map(row => {
+    const dni = findFieldValue(row, ["DNI", "RUT", "Cedula", "Cédula", "Documento", "Numero de documento", "Número de documento", "Identificacion", "Identificación"]);
+    const nombre = findFieldValue(row, ["Nombre completo", "Nombre", "Nombres", "Empleado", "Socio", "Proveedor", "Razon social", "Razón social"]);
+    const monto = parseMoneyValue(findFieldValue(row, ["Monto boleta", "Monto de la boleta", "Monto", "Importe", "Total", "Valor", "Cantidad"]));
+    const fecha = parseFlexibleDate(findFieldValue(row, ["Fecha boleta", "Fecha de boleta", "Fecha factura", "Fecha de factura", "Fecha emision", "Fecha de emisión", "Fecha"]));
+    const monedaRaw = findFieldValue(row, ["Moneda", "Divisa", "Currency", "Tipo moneda"]);
+    const file = findFieldValue(row, ["Boleta", "Factura", "Archivo", "Comprobante", "Upload", "Adjunto"]);
+    return {
+      raw: row,
+      rowNumber: row.__rowNumber,
+      dni: String(dni ?? "").trim(),
+      normalizedDni: normalizeDoc(dni),
+      nombre: String(nombre ?? "").trim(),
+      normalizedName: normalizePersonName(nombre),
+      monto,
+      fecha,
+      monedaRaw: normalizeCurrency(monedaRaw),
+      file: String(file ?? "").trim(),
+    };
+  });
+  const boletaCurrentMonth = selected?.mes.slice(0, 7) ?? "";
+  const usedBoletaResponses = new Set<number>();
+  const boletaCheckRows: BoletaCheckRow[] = boletaExpectedRows.map(expected => {
+    const candidates = [
+      ...(boletaExpectedByDni.has(expected.normalizedDni)
+        ? boletaResponseData.filter(r => r.normalizedDni === expected.normalizedDni)
+        : []),
+      ...(boletaExpectedByDni.has(expected.normalizedDni)
+        ? []
+        : boletaResponseData.filter(r => r.normalizedName && r.normalizedName === expected.normalizedName)),
+    ];
+    const currencyCandidates = candidates.filter(response => {
+      if (!response.monedaRaw) {
+        if (expected.pais === "Argentina" && response.monto !== null) {
+          return expected.moneda === (response.monto > 100000 ? "ARS" : "USD");
+        }
+        return true;
+      }
+      return response.monedaRaw === expected.moneda;
+    });
+    const closest = currencyCandidates
+      .map((response, index) => ({
+        response,
+        index,
+        diff: response.monto === null ? Number.POSITIVE_INFINITY : Math.abs(response.monto - expected.expectedAmount),
+      }))
+      .sort((a, b) => a.diff - b.diff)[0]?.response ?? null;
+
+    const reasons: string[] = [];
+    let status: BoletaCheckStatus = "ok";
+    let severity: BoletaCheckRow["severity"] = "ok";
+
+    if (!closest) {
+      status = "sin_respuesta";
+      severity = "error";
+      reasons.push("Sin respuesta para esta moneda");
+    } else {
+      const responseIndex = boletaResponseData.indexOf(closest);
+      if (responseIndex >= 0) usedBoletaResponses.add(responseIndex);
+      const duplicates = currencyCandidates.length;
+      const amountDiff = closest.monto === null ? null : Math.abs(closest.monto - expected.expectedAmount);
+      const tolerance = Math.max(1, Math.abs(expected.expectedAmount) * 0.005);
+
+      if (!closest.fecha) {
+        status = "sin_fecha";
+        severity = "warning";
+        reasons.push("Sin fecha de boleta");
+      } else if (boletaCurrentMonth && !closest.fecha.startsWith(boletaCurrentMonth)) {
+        status = "fecha_distinta";
+        severity = "error";
+        reasons.push(`Fecha fuera del mes ${boletaCurrentMonth}`);
+      }
+
+      if (closest.monto === null) {
+        status = "sin_monto";
+        severity = "error";
+        reasons.push("Sin monto declarado");
+      } else if (amountDiff !== null && amountDiff > tolerance) {
+        status = "monto_distinto";
+        severity = "error";
+        reasons.push(`Diferencia ${fmt(closest.monto - expected.expectedAmount, 2)}`);
+      }
+
+      if (duplicates > 1) {
+        status = status === "ok" ? "duplicado" : status;
+        severity = severity === "ok" ? "warning" : severity;
+        reasons.push(`${duplicates} respuestas para la misma persona/moneda`);
+      }
+    }
+
+    return {
+      status,
+      severity,
+      dni: expected.dni,
+      nombre: expected.nombre,
+      pais: expected.pais,
+      moneda: expected.moneda,
+      expectedAmount: expected.expectedAmount,
+      responseAmount: closest?.monto ?? null,
+      responseDate: closest?.fecha ?? null,
+      responseName: closest?.nombre ?? "",
+      rowNumber: closest?.rowNumber,
+      reasons,
+    };
+  });
+  const boletaUnmatchedResponses: BoletaCheckRow[] = boletaResponseData
+    .map((response, index) => ({ response, index }))
+    .filter(({ index, response }) => !usedBoletaResponses.has(index) && (response.dni || response.nombre || response.monto !== null))
+    .map(({ response }) => ({
+      status: "sin_match",
+      severity: "warning",
+      dni: response.dni,
+      nombre: response.nombre || "Respuesta sin nombre",
+      pais: "",
+      moneda: response.monedaRaw || "",
+      expectedAmount: 0,
+      responseAmount: response.monto,
+      responseDate: response.fecha,
+      responseName: response.nombre,
+      rowNumber: response.rowNumber,
+      reasons: ["Respuesta no cruzó con la nómina actual"],
+    }));
+  const boletaAllChecks = [...boletaCheckRows, ...boletaUnmatchedResponses];
+  const boletaSummary = {
+    ok: boletaCheckRows.filter(r => r.status === "ok").length,
+    issues: boletaAllChecks.filter(r => r.severity !== "ok").length,
+    missing: boletaCheckRows.filter(r => r.status === "sin_respuesta").length,
+    amount: boletaCheckRows.filter(r => r.status === "monto_distinto" || r.status === "sin_monto").length,
+    date: boletaCheckRows.filter(r => r.status === "fecha_distinta" || r.status === "sin_fecha").length,
+    unmatched: boletaUnmatchedResponses.length,
+  };
+  const boletaIssueRows = boletaAllChecks.filter(r => r.severity !== "ok");
   const normalizeSearch = (value: string) =>
     value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   const filterPayrollRows = (rows: CalcRow[]) => {
@@ -4146,7 +4442,95 @@ export default function NominasPage() {
             {/* TAB: Check boletas */}
             {activeTab === "checkeo_boleta" && (
               <div style={{ background: "#fff", border: "1px solid var(--g66-border)", borderRadius: 10, padding: 22, minHeight: 260 }}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: "var(--g66-text)", marginBottom: 6 }}>Check boletas</div>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 18 }}>
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: "var(--g66-text)", marginBottom: 6 }}>Check boletas</div>
+                    <div style={{ fontSize: 13, color: "var(--g66-muted)" }}>
+                      Cruza respuestas del formulario contra la nómina actual. Argentina exige boleta USD y ARS cuando correspondan.
+                    </div>
+                    {boletaSheetName && (
+                      <div style={{ fontSize: 12, color: "var(--g66-muted)", marginTop: 6 }}>
+                        Fuente: {boletaSheetName} · {boletaRows.length} respuestas · {boletaHeaders.length} columnas
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadBoletaResponses}
+                    disabled={boletaLoading}
+                    style={{ border: "none", background: "var(--g66-primary)", color: "#fff", borderRadius: 8, padding: "10px 14px", fontWeight: 800, cursor: boletaLoading ? "default" : "pointer", opacity: boletaLoading ? 0.7 : 1 }}
+                  >
+                    {boletaLoading ? "Actualizando..." : "Actualizar desde Google Sheet"}
+                  </button>
+                </div>
+
+                {boletaError && (
+                  <div style={{ border: "1px solid #fecaca", background: "#fef2f2", color: "#991b1b", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, fontWeight: 700 }}>
+                    {boletaError}
+                  </div>
+                )}
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(120px, 1fr))", gap: 10, marginBottom: 18 }}>
+                  {[
+                    ["OK", boletaSummary.ok, "#dcfce7", "#166534"],
+                    ["Por revisar", boletaSummary.issues, "#fee2e2", "#991b1b"],
+                    ["Sin respuesta", boletaSummary.missing, "#ffedd5", "#9a3412"],
+                    ["Monto", boletaSummary.amount, "#fef3c7", "#92400e"],
+                    ["Fecha", boletaSummary.date, "#e0f2fe", "#075985"],
+                    ["Sin match", boletaSummary.unmatched, "#ede9fe", "#5b21b6"],
+                  ].map(([label, value, bg, color]) => (
+                    <div key={String(label)} style={{ background: String(bg), color: String(color), borderRadius: 10, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.06)" }}>
+                      <div style={{ fontSize: 12, fontWeight: 800 }}>{label}</div>
+                      <div style={{ fontSize: 24, fontWeight: 950, marginTop: 4 }}>{String(value)}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {boletaRows.length === 0 ? (
+                  <div style={{ border: "1px dashed var(--g66-border)", borderRadius: 10, padding: 18, color: "var(--g66-muted)", fontSize: 13 }}>
+                    Aprieta “Actualizar desde Google Sheet” para cargar respuestas y ver quién no ha respondido, montos distintos, fechas fuera del mes o duplicados.
+                  </div>
+                ) : boletaIssueRows.length === 0 ? (
+                  <div style={{ border: "1px solid #bbf7d0", background: "#f0fdf4", borderRadius: 10, padding: 14, color: "#166534", fontWeight: 800 }}>
+                    Todo calza: no hay diferencias de monto, fecha ni respuestas faltantes para la nómina actual.
+                  </div>
+                ) : (
+                  <div style={{ overflowX: "auto", border: "1px solid var(--g66-border)", borderRadius: 10 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead style={{ background: "#f8fafc", color: "var(--g66-muted)" }}>
+                        <tr>
+                          {["Estado", "Nombre", "DNI", "País", "Mon.", "Monto nómina", "Monto boleta", "Fecha boleta", "Fila", "Motivo"].map(h => (
+                            <th key={h} style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid var(--g66-border)", whiteSpace: "nowrap" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {boletaIssueRows.map((row, index) => (
+                          <tr key={`${row.status}-${row.dni}-${row.moneda}-${row.rowNumber ?? index}`} style={{ borderBottom: "1px solid #edf2f7", background: row.severity === "error" ? "#fff7f7" : "#fff" }}>
+                            <td style={{ padding: "9px 12px", fontWeight: 900, color: row.severity === "error" ? "#b91c1c" : "#92400e", whiteSpace: "nowrap" }}>
+                              {row.status === "sin_respuesta" ? "Sin respuesta" :
+                                row.status === "monto_distinto" ? "Monto distinto" :
+                                row.status === "fecha_distinta" ? "Fecha incorrecta" :
+                                row.status === "duplicado" ? "Duplicado" :
+                                row.status === "sin_match" ? "Sin match" :
+                                row.status === "sin_monto" ? "Sin monto" :
+                                row.status === "sin_fecha" ? "Sin fecha" : "OK"}
+                            </td>
+                            <td style={{ padding: "9px 12px", fontWeight: 800, color: "var(--g66-text)", minWidth: 220 }}>{row.nombre}</td>
+                            <td style={{ padding: "9px 12px", color: "var(--g66-muted)", whiteSpace: "nowrap" }}>{row.dni || "—"}</td>
+                            <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>{row.pais || "—"}</td>
+                            <td style={{ padding: "9px 12px", fontWeight: 900, whiteSpace: "nowrap" }}>{row.moneda || "—"}</td>
+                            <td style={{ padding: "9px 12px", textAlign: "right", whiteSpace: "nowrap" }}>{row.expectedAmount ? fmt(row.expectedAmount, 2) : "—"}</td>
+                            <td style={{ padding: "9px 12px", textAlign: "right", whiteSpace: "nowrap" }}>{row.responseAmount === null ? "—" : fmt(row.responseAmount, 2)}</td>
+                            <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>{fmtDate(row.responseDate)}</td>
+                            <td style={{ padding: "9px 12px", color: "var(--g66-muted)", whiteSpace: "nowrap" }}>{row.rowNumber ?? "—"}</td>
+                            <td style={{ padding: "9px 12px", minWidth: 260 }}>{row.reasons.join(" · ")}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </div>
