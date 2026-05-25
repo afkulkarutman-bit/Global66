@@ -51,26 +51,35 @@ type PayrollSalaryChange = {
 type CommissionType = "CX" | "B2B";
 type ManualCommissionDraft = { dni: string; nombre: string; monto_bruto: string; moneda: string; mes: string };
 type BoletaResponseRow = Record<string, unknown> & { __rowNumber?: number };
-type BoletaCheckStatus = "ok" | "sin_respuesta" | "monto_distinto" | "fecha_distinta" | "duplicado" | "sin_match" | "sin_monto" | "sin_fecha";
-type BoletaCheckRow = {
-  status: BoletaCheckStatus;
-  severity: "ok" | "warning" | "error";
-  dni: string;
+type GeminiReportRow = {
+  formEmail: string;
+  fileUrl: string;
+  rowNumber: number;
+  monto: number | null;
+  moneda: string | null;
+  fecha: string | null;
+  nombreEnBoleta: string | null;
+  error?: string;
+};
+type CrossRow = {
   nombre: string;
+  emailNomina: string;
   pais: string;
   moneda: string;
-  expectedAmount: number;
-  responseAmount: number | null;
-  responseDate: string | null;
-  responseName: string;
-  rowNumber?: number;
-  reasons: string[];
+  montoNomina: number;
+  montoGemini: number | null;
+  fechaGemini: string | null;
+  fileUrl: string;
+  formEmail: string;
+  status: "ok" | "monto_distinto" | "sin_respuesta" | "fecha_incorrecta" | "sin_monto";
+  diferencia: number | null;
 };
 type BoletaExpectedRow = {
   key: string;
   dni: string;
   normalizedDni: string;
   normalizedName: string;
+  normalizedEmail: string;
   nombre: string;
   pais: string;
   moneda: string;
@@ -197,6 +206,10 @@ function normalizeDoc(value: unknown) {
   return String(value ?? "").replace(/[^0-9kK]/g, "").toUpperCase();
 }
 
+function normalizeEmail(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 function normalizePersonName(value: unknown) {
   return normalizePlain(value)
     .replace(/[^a-z0-9\s]/g, " ")
@@ -227,6 +240,11 @@ function parseMoneyValue(value: unknown): number | null {
 }
 
 function parseFlexibleDate(value: unknown): string | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    const ms = excelEpoch.getTime() + value * 86400000;
+    return new Date(ms).toISOString().slice(0, 10);
+  }
   const raw = String(value ?? "").trim();
   if (!raw) return null;
   const iso = raw.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
@@ -269,6 +287,42 @@ function normalizeCurrency(value: unknown) {
   if (raw.includes("pen") || raw.includes("sol")) return "PEN";
   if (raw.includes("eur") || raw.includes("euro")) return "EUR";
   return raw.toUpperCase();
+}
+
+function sheetRowsToBoletaObjects(rows: unknown[][]): BoletaResponseRow[] {
+  const nonEmpty = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => row.some(cell => String(cell ?? "").trim() !== ""));
+  if (nonEmpty.length === 0) return [];
+
+  const first = nonEmpty[0].row.map(cell => String(cell ?? "").trim());
+  const firstLooksHeader = first.some(cell => {
+    const normalized = normalizePlain(cell);
+    return normalized.includes("correo") || normalized.includes("pdf") || normalized.includes("marca temporal") || normalized.includes("monto");
+  });
+  const headers = firstLooksHeader
+    ? first
+    : ["Marca temporal", "Dirección de correo electrónico", "PDF"];
+  const dataRows = firstLooksHeader ? nonEmpty.slice(1) : nonEmpty;
+
+  return dataRows.map(({ row, index }) => {
+    const obj: BoletaResponseRow = { __rowNumber: index + 1 };
+    headers.forEach((header, colIndex) => {
+      obj[header || `Columna ${colIndex + 1}`] = row[colIndex] ?? "";
+    });
+    return obj;
+  });
+}
+
+function selectBoletasSheetName(sheetNames: string[], mes: string | undefined) {
+  const selectedDate = mes ? new Date(`${mes.slice(0, 10)}T12:00:00`) : null;
+  const monthLabel = selectedDate && !Number.isNaN(selectedDate.getTime())
+    ? `${MONTHS[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
+    : "";
+  const normalizedMonth = normalizePlain(monthLabel);
+  const monthMatch = sheetNames.find(name => normalizePlain(name).includes(normalizedMonth));
+  if (monthMatch) return monthMatch;
+  return sheetNames.find(name => normalizePlain(name).includes("respuestas de formulario")) ?? sheetNames[0] ?? "";
 }
 
 function monthNumberSinceIngreso(fechaIngreso: string | null, period: PayrollPeriod): number | null {
@@ -587,6 +641,11 @@ export default function NominasPage() {
   const [boletaSheetName, setBoletaSheetName] = useState("");
   const [boletaLoading, setBoletaLoading] = useState(false);
   const [boletaError, setBoletaError] = useState("");
+  const [geminiReport, setGeminiReport] = useState<GeminiReportRow[]>([]);
+  const [geminiAnalyzing, setGeminiAnalyzing] = useState(false);
+  const [geminiProgress, setGeminiProgress] = useState({ current: 0, total: 0 });
+  const [showCross, setShowCross] = useState(false);
+  const boletaFileRef = useRef<HTMLInputElement>(null);
   const cxRef = useRef<HTMLInputElement>(null);
   const b2bRef = useRef<HTMLInputElement>(null);
 
@@ -701,6 +760,94 @@ export default function NominasPage() {
       setBoletaError(error instanceof Error ? error.message : "No se pudo leer el Google Sheet de boletas.");
     } finally {
       setBoletaLoading(false);
+    }
+  };
+
+  const runGeminiAnalysis = async () => {
+    const FILE_CANDIDATES = ["PDF", "Boleta", "Factura", "Archivo", "Comprobante", "Upload", "Adjunto"];
+    const EMAIL_CANDIDATES = ["Dirección de correo electrónico", "Correo electrónico", "Correo", "Email", "Mail"];
+
+    const rowsToAnalyze = boletaRows
+      .map(row => {
+        const email = String(findFieldValue(row, EMAIL_CANDIDATES) ?? "").trim();
+        const fileUrl = String(findFieldValue(row, FILE_CANDIDATES) ?? "").trim();
+        const rowNumber = row.__rowNumber ?? 0;
+        return { formEmail: email, fileUrl, rowNumber };
+      })
+      .filter(r => r.fileUrl !== "");
+
+    if (rowsToAnalyze.length === 0) {
+      setBoletaError("No hay boletas con PDF. Carga las respuestas del formulario primero.");
+      return;
+    }
+
+    setGeminiAnalyzing(true);
+    setGeminiProgress({ current: 0, total: rowsToAnalyze.length });
+    setBoletaError("");
+    setShowCross(false);
+    const newReport: GeminiReportRow[] = [];
+    const BATCH = 10;
+
+    for (let i = 0; i < rowsToAnalyze.length; i += BATCH) {
+      const batch = rowsToAnalyze.slice(i, i + BATCH);
+      try {
+        const res = await fetch("/api/nominas/boletas/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: batch.map(r => ({ email: r.formEmail, fileUrl: r.fileUrl })) }),
+        });
+        const data = await res.json();
+        if (Array.isArray(data.results)) {
+          for (let j = 0; j < data.results.length; j++) {
+            const r = data.results[j];
+            newReport.push({
+              formEmail: batch[j].formEmail,
+              fileUrl: batch[j].fileUrl,
+              rowNumber: batch[j].rowNumber,
+              monto: r.monto ?? null,
+              moneda: r.moneda ?? null,
+              fecha: r.fecha ?? null,
+              nombreEnBoleta: r.nombre ?? null,
+              error: r.error,
+            });
+          }
+        }
+      } catch {
+        for (const item of batch) {
+          newReport.push({ ...item, monto: null, moneda: null, fecha: null, nombreEnBoleta: null, error: "Error de red" });
+        }
+      }
+      setGeminiProgress({ current: Math.min(i + BATCH, rowsToAnalyze.length), total: rowsToAnalyze.length });
+    }
+
+    setGeminiReport(newReport);
+    setGeminiAnalyzing(false);
+  };
+
+  const uploadBoletaExcel = async (file: File | null) => {
+    if (!file) return;
+    setBoletaLoading(true);
+    setBoletaError("");
+    try {
+      const XLSX = await import("xlsx");
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
+      const sheetName = selectBoletasSheetName(workbook.SheetNames, selected?.mes);
+      const sheet = workbook.Sheets[sheetName];
+      if (!sheet) throw new Error("No se encontró una hoja válida en el Excel.");
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as unknown[][];
+      const objects = sheetRowsToBoletaObjects(rows);
+      setBoletaRows(objects);
+      setBoletaHeaders(objects.length > 0 ? Object.keys(objects[0]).filter(key => key !== "__rowNumber") : []);
+      setBoletaSheetName(sheetName);
+    } catch (error) {
+      setBoletaRows([]);
+      setBoletaHeaders([]);
+      setBoletaSheetName("");
+      setBoletaError(error instanceof Error ? error.message : "No se pudo leer el Excel de boletas.");
+    } finally {
+      setBoletaLoading(false);
+      if (boletaFileRef.current) boletaFileRef.current.value = "";
     }
   };
 
@@ -1778,161 +1925,101 @@ export default function NominasPage() {
   const argEmployees = employees.filter(e => e.es_argentina);
   const boletaExpectedRows: BoletaExpectedRow[] = calcRows.flatMap(r => {
     if (r.sueldo_neto_local <= 0) return [];
+    const base = {
+      dni: r.dni,
+      normalizedDni: normalizeDoc(r.dni),
+      normalizedName: normalizePersonName(r.nombre),
+      normalizedEmail: normalizeEmail(r.email_global),
+      nombre: r.nombre,
+      pais: r.pais ?? "",
+    };
     if (r.es_argentina) {
       return [
-        { key: `${r.id}:USD`, dni: r.dni, normalizedDni: normalizeDoc(r.dni), normalizedName: normalizePersonName(r.nombre), nombre: r.nombre, pais: r.pais ?? "", moneda: "USD", expectedAmount: r.pago_usd },
-        { key: `${r.id}:ARS`, dni: r.dni, normalizedDni: normalizeDoc(r.dni), normalizedName: normalizePersonName(r.nombre), nombre: r.nombre, pais: r.pais ?? "", moneda: "ARS", expectedAmount: r.pago_ars_local },
+        { key: `${r.id}:USD`, ...base, moneda: "USD", expectedAmount: r.pago_usd },
+        { key: `${r.id}:ARS`, ...base, moneda: "ARS", expectedAmount: r.pago_ars_local },
       ].filter(item => item.expectedAmount > 0.5);
     }
     return [{
       key: `${r.id}:${r.moneda}`,
-      dni: r.dni,
-      normalizedDni: normalizeDoc(r.dni),
-      normalizedName: normalizePersonName(r.nombre),
-      nombre: r.nombre,
-      pais: r.pais ?? "",
+      ...base,
       moneda: r.moneda,
       expectedAmount: r.sueldo_neto_local,
     }];
   });
-  const boletaExpectedByDni = new Map<string, BoletaExpectedRow[]>();
-  const boletaExpectedByName = new Map<string, BoletaExpectedRow[]>();
-  boletaExpectedRows.forEach(row => {
-    if (row.normalizedDni) boletaExpectedByDni.set(row.normalizedDni, [...(boletaExpectedByDni.get(row.normalizedDni) ?? []), row]);
-    if (row.normalizedName) boletaExpectedByName.set(row.normalizedName, [...(boletaExpectedByName.get(row.normalizedName) ?? []), row]);
-  });
-  const boletaResponseData = boletaRows.map(row => {
-    const dni = findFieldValue(row, ["DNI", "RUT", "Cedula", "Cédula", "Documento", "Numero de documento", "Número de documento", "Identificacion", "Identificación"]);
-    const nombre = findFieldValue(row, ["Nombre completo", "Nombre", "Nombres", "Empleado", "Socio", "Proveedor", "Razon social", "Razón social"]);
-    const monto = parseMoneyValue(findFieldValue(row, ["Monto boleta", "Monto de la boleta", "Monto", "Importe", "Total", "Valor", "Cantidad"]));
-    const fecha = parseFlexibleDate(findFieldValue(row, ["Fecha boleta", "Fecha de boleta", "Fecha factura", "Fecha de factura", "Fecha emision", "Fecha de emisión", "Fecha"]));
-    const monedaRaw = findFieldValue(row, ["Moneda", "Divisa", "Currency", "Tipo moneda"]);
-    const file = findFieldValue(row, ["Boleta", "Factura", "Archivo", "Comprobante", "Upload", "Adjunto"]);
-    return {
-      raw: row,
-      rowNumber: row.__rowNumber,
-      dni: String(dni ?? "").trim(),
-      normalizedDni: normalizeDoc(dni),
-      nombre: String(nombre ?? "").trim(),
-      normalizedName: normalizePersonName(nombre),
-      monto,
-      fecha,
-      monedaRaw: normalizeCurrency(monedaRaw),
-      file: String(file ?? "").trim(),
-    };
-  });
   const boletaCurrentMonth = selected?.mes.slice(0, 7) ?? "";
-  const usedBoletaResponses = new Set<number>();
-  const boletaCheckRows: BoletaCheckRow[] = boletaExpectedRows.map(expected => {
-    const candidates = [
-      ...(boletaExpectedByDni.has(expected.normalizedDni)
-        ? boletaResponseData.filter(r => r.normalizedDni === expected.normalizedDni)
-        : []),
-      ...(boletaExpectedByDni.has(expected.normalizedDni)
-        ? []
-        : boletaResponseData.filter(r => r.normalizedName && r.normalizedName === expected.normalizedName)),
-    ];
-    const currencyCandidates = candidates.filter(response => {
-      if (!response.monedaRaw) {
-        if (expected.pais === "Argentina" && response.monto !== null) {
-          return expected.moneda === (response.monto > 100000 ? "ARS" : "USD");
-        }
-        return true;
-      }
-      return response.monedaRaw === expected.moneda;
-    });
-    const closest = currencyCandidates
-      .map((response, index) => ({
-        response,
-        index,
-        diff: response.monto === null ? Number.POSITIVE_INFINITY : Math.abs(response.monto - expected.expectedAmount),
-      }))
-      .sort((a, b) => a.diff - b.diff)[0]?.response ?? null;
 
-    const reasons: string[] = [];
-    let status: BoletaCheckStatus = "ok";
-    let severity: BoletaCheckRow["severity"] = "ok";
+  // Group gemini rows by form email and by extracted name for matching
+  const geminiByEmail = new Map<string, GeminiReportRow[]>();
+  const geminiByName = new Map<string, GeminiReportRow[]>();
+  for (const g of geminiReport) {
+    const eKey = g.formEmail.toLowerCase().trim();
+    if (eKey) geminiByEmail.set(eKey, [...(geminiByEmail.get(eKey) ?? []), g]);
+    const nKey = normalizePersonName(g.nombreEnBoleta);
+    if (nKey) geminiByName.set(nKey, [...(geminiByName.get(nKey) ?? []), g]);
+  }
+  const usedGeminiIdx = new Set<number>();
 
-    if (!closest) {
-      status = "sin_respuesta";
-      severity = "error";
-      reasons.push("Sin respuesta para esta moneda");
+  const crossRows: CrossRow[] = boletaExpectedRows.map(expected => {
+    let candidates: GeminiReportRow[] = [];
+    if (expected.normalizedEmail) {
+      candidates = geminiByEmail.get(expected.normalizedEmail) ?? [];
+    }
+    if (candidates.length === 0 && expected.normalizedName) {
+      candidates = geminiByName.get(expected.normalizedName) ?? [];
+    }
+    const available = candidates.filter(g => !usedGeminiIdx.has(geminiReport.indexOf(g)));
+
+    let geminiRow: GeminiReportRow | null = null;
+    if (expected.pais === "Argentina" && available.length > 1) {
+      const sorted = [...available].sort((a, b) => (a.monto ?? 0) - (b.monto ?? 0));
+      geminiRow = expected.moneda === "USD" ? sorted[0] : sorted[sorted.length - 1];
     } else {
-      const responseIndex = boletaResponseData.indexOf(closest);
-      if (responseIndex >= 0) usedBoletaResponses.add(responseIndex);
-      const duplicates = currencyCandidates.length;
-      const amountDiff = closest.monto === null ? null : Math.abs(closest.monto - expected.expectedAmount);
-      const tolerance = Math.max(1, Math.abs(expected.expectedAmount) * 0.005);
+      geminiRow = available[0] ?? null;
+    }
+    if (geminiRow) usedGeminiIdx.add(geminiReport.indexOf(geminiRow));
 
-      if (!closest.fecha) {
-        status = "sin_fecha";
-        severity = "warning";
-        reasons.push("Sin fecha de boleta");
-      } else if (boletaCurrentMonth && !closest.fecha.startsWith(boletaCurrentMonth)) {
-        status = "fecha_distinta";
-        severity = "error";
-        reasons.push(`Fecha fuera del mes ${boletaCurrentMonth}`);
-      }
-
-      if (closest.monto === null) {
+    let status: CrossRow["status"] = "sin_respuesta";
+    let diferencia: number | null = null;
+    if (geminiRow) {
+      if (geminiRow.monto === null) {
         status = "sin_monto";
-        severity = "error";
-        reasons.push("Sin monto declarado");
-      } else if (amountDiff !== null && amountDiff > tolerance) {
-        status = "monto_distinto";
-        severity = "error";
-        reasons.push(`Diferencia ${fmt(closest.monto - expected.expectedAmount, 2)}`);
-      }
-
-      if (duplicates > 1) {
-        status = status === "ok" ? "duplicado" : status;
-        severity = severity === "ok" ? "warning" : severity;
-        reasons.push(`${duplicates} respuestas para la misma persona/moneda`);
+      } else {
+        diferencia = geminiRow.monto - expected.expectedAmount;
+        const tolerance = Math.max(1, Math.abs(expected.expectedAmount) * 0.005);
+        const dateOk = !geminiRow.fecha || !boletaCurrentMonth || geminiRow.fecha.startsWith(boletaCurrentMonth);
+        if (!dateOk) {
+          status = "fecha_incorrecta";
+        } else if (Math.abs(diferencia) > tolerance) {
+          status = "monto_distinto";
+        } else {
+          status = "ok";
+        }
       }
     }
 
     return {
-      status,
-      severity,
-      dni: expected.dni,
       nombre: expected.nombre,
+      emailNomina: expected.normalizedEmail,
       pais: expected.pais,
       moneda: expected.moneda,
-      expectedAmount: expected.expectedAmount,
-      responseAmount: closest?.monto ?? null,
-      responseDate: closest?.fecha ?? null,
-      responseName: closest?.nombre ?? "",
-      rowNumber: closest?.rowNumber,
-      reasons,
+      montoNomina: expected.expectedAmount,
+      montoGemini: geminiRow?.monto ?? null,
+      fechaGemini: geminiRow?.fecha ?? null,
+      fileUrl: geminiRow?.fileUrl ?? "",
+      formEmail: geminiRow?.formEmail ?? "",
+      status,
+      diferencia,
     };
   });
-  const boletaUnmatchedResponses: BoletaCheckRow[] = boletaResponseData
-    .map((response, index) => ({ response, index }))
-    .filter(({ index, response }) => !usedBoletaResponses.has(index) && (response.dni || response.nombre || response.monto !== null))
-    .map(({ response }) => ({
-      status: "sin_match",
-      severity: "warning",
-      dni: response.dni,
-      nombre: response.nombre || "Respuesta sin nombre",
-      pais: "",
-      moneda: response.monedaRaw || "",
-      expectedAmount: 0,
-      responseAmount: response.monto,
-      responseDate: response.fecha,
-      responseName: response.nombre,
-      rowNumber: response.rowNumber,
-      reasons: ["Respuesta no cruzó con la nómina actual"],
-    }));
-  const boletaAllChecks = [...boletaCheckRows, ...boletaUnmatchedResponses];
+
   const boletaSummary = {
-    ok: boletaCheckRows.filter(r => r.status === "ok").length,
-    issues: boletaAllChecks.filter(r => r.severity !== "ok").length,
-    missing: boletaCheckRows.filter(r => r.status === "sin_respuesta").length,
-    amount: boletaCheckRows.filter(r => r.status === "monto_distinto" || r.status === "sin_monto").length,
-    date: boletaCheckRows.filter(r => r.status === "fecha_distinta" || r.status === "sin_fecha").length,
-    unmatched: boletaUnmatchedResponses.length,
+    total: boletaExpectedRows.length,
+    ok: crossRows.filter(r => r.status === "ok").length,
+    missing: crossRows.filter(r => r.status === "sin_respuesta").length,
+    monto_distinto: crossRows.filter(r => r.status === "monto_distinto").length,
+    fecha_incorrecta: crossRows.filter(r => r.status === "fecha_incorrecta").length,
+    sin_monto: crossRows.filter(r => r.status === "sin_monto").length,
   };
-  const boletaIssueRows = boletaAllChecks.filter(r => r.severity !== "ok");
   const normalizeSearch = (value: string) =>
     value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   const filterPayrollRows = (rows: CalcRow[]) => {
@@ -4442,26 +4529,50 @@ export default function NominasPage() {
             {/* TAB: Check boletas */}
             {activeTab === "checkeo_boleta" && (
               <div style={{ background: "#fff", border: "1px solid var(--g66-border)", borderRadius: 10, padding: 22, minHeight: 260 }}>
+                {/* Header */}
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 18 }}>
                   <div>
                     <div style={{ fontSize: 20, fontWeight: 900, color: "var(--g66-text)", marginBottom: 6 }}>Check boletas</div>
                     <div style={{ fontSize: 13, color: "var(--g66-muted)" }}>
-                      Cruza respuestas del formulario contra la nómina actual. Argentina exige boleta USD y ARS cuando correspondan.
+                      Nómina de <strong>{selected ? formatMes(selected.mes) : "—"}</strong>. Argentinos deben subir 2 boletas (USD + ARS).
                     </div>
                     {boletaSheetName && (
-                      <div style={{ fontSize: 12, color: "var(--g66-muted)", marginTop: 6 }}>
-                        Fuente: {boletaSheetName} · {boletaRows.length} respuestas · {boletaHeaders.length} columnas
+                      <div style={{ fontSize: 12, color: "var(--g66-muted)", marginTop: 4 }}>
+                        {boletaSheetName} · {boletaRows.length} respuestas · mes: {boletaCurrentMonth || "—"}
                       </div>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={loadBoletaResponses}
-                    disabled={boletaLoading}
-                    style={{ border: "none", background: "var(--g66-primary)", color: "#fff", borderRadius: 8, padding: "10px 14px", fontWeight: 800, cursor: boletaLoading ? "default" : "pointer", opacity: boletaLoading ? 0.7 : 1 }}
-                  >
-                    {boletaLoading ? "Actualizando..." : "Actualizar desde Google Sheet"}
-                  </button>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <button
+                      type="button"
+                      onClick={loadBoletaResponses}
+                      disabled={boletaLoading}
+                      style={{ border: "none", background: "var(--g66-primary)", color: "#fff", borderRadius: 8, padding: "10px 14px", fontWeight: 800, cursor: boletaLoading ? "default" : "pointer", opacity: boletaLoading ? 0.7 : 1 }}
+                    >
+                      {boletaLoading ? "Cargando..." : "Actualizar desde Google Sheet"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={runGeminiAnalysis}
+                      disabled={geminiAnalyzing || boletaRows.length === 0}
+                      style={{ border: "none", background: geminiAnalyzing ? "#6b7280" : "#7c3aed", color: "#fff", borderRadius: 8, padding: "10px 14px", fontWeight: 800, cursor: (geminiAnalyzing || boletaRows.length === 0) ? "default" : "pointer", opacity: (geminiAnalyzing || boletaRows.length === 0) ? 0.7 : 1 }}
+                    >
+                      {geminiAnalyzing
+                        ? `Analizando... ${geminiProgress.current}/${geminiProgress.total}`
+                        : geminiReport.length > 0
+                          ? `Gemini ✓ (${geminiReport.length})`
+                          : "Analizar con Gemini"}
+                    </button>
+                    {geminiReport.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowCross(v => !v)}
+                        style={{ border: "none", background: showCross ? "#059669" : "#0f172a", color: "#fff", borderRadius: 8, padding: "10px 14px", fontWeight: 800, cursor: "pointer" }}
+                      >
+                        {showCross ? "Ocultar cruce" : "Cruzar con nómina"}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {boletaError && (
@@ -4470,65 +4581,120 @@ export default function NominasPage() {
                   </div>
                 )}
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(120px, 1fr))", gap: 10, marginBottom: 18 }}>
-                  {[
-                    ["OK", boletaSummary.ok, "#dcfce7", "#166534"],
-                    ["Por revisar", boletaSummary.issues, "#fee2e2", "#991b1b"],
-                    ["Sin respuesta", boletaSummary.missing, "#ffedd5", "#9a3412"],
-                    ["Monto", boletaSummary.amount, "#fef3c7", "#92400e"],
-                    ["Fecha", boletaSummary.date, "#e0f2fe", "#075985"],
-                    ["Sin match", boletaSummary.unmatched, "#ede9fe", "#5b21b6"],
-                  ].map(([label, value, bg, color]) => (
-                    <div key={String(label)} style={{ background: String(bg), color: String(color), borderRadius: 10, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.06)" }}>
-                      <div style={{ fontSize: 12, fontWeight: 800 }}>{label}</div>
-                      <div style={{ fontSize: 24, fontWeight: 950, marginTop: 4 }}>{String(value)}</div>
+                {/* Progress bar during analysis */}
+                {geminiAnalyzing && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 12, color: "var(--g66-muted)", marginBottom: 6 }}>
+                      Leyendo PDFs con Gemini... {geminiProgress.current} de {geminiProgress.total}
                     </div>
-                  ))}
-                </div>
+                    <div style={{ background: "#e2e8f0", borderRadius: 8, height: 8, overflow: "hidden" }}>
+                      <div style={{ background: "#7c3aed", height: "100%", width: `${geminiProgress.total > 0 ? (geminiProgress.current / geminiProgress.total) * 100 : 0}%`, transition: "width 0.3s" }} />
+                    </div>
+                  </div>
+                )}
 
-                {boletaRows.length === 0 ? (
-                  <div style={{ border: "1px dashed var(--g66-border)", borderRadius: 10, padding: 18, color: "var(--g66-muted)", fontSize: 13 }}>
-                    Aprieta “Actualizar desde Google Sheet” para cargar respuestas y ver quién no ha respondido, montos distintos, fechas fuera del mes o duplicados.
+                {/* Empty state */}
+                {boletaRows.length === 0 && !boletaLoading && (
+                  <div style={{ border: "1px dashed var(--g66-border)", borderRadius: 10, padding: 24, color: "var(--g66-muted)", fontSize: 13, textAlign: "center" }}>
+                    Carga las respuestas del Google Sheet para comenzar.
                   </div>
-                ) : boletaIssueRows.length === 0 ? (
-                  <div style={{ border: "1px solid #bbf7d0", background: "#f0fdf4", borderRadius: 10, padding: 14, color: "#166534", fontWeight: 800 }}>
-                    Todo calza: no hay diferencias de monto, fecha ni respuestas faltantes para la nómina actual.
-                  </div>
-                ) : (
-                  <div style={{ overflowX: "auto", border: "1px solid var(--g66-border)", borderRadius: 10 }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                      <thead style={{ background: "#f8fafc", color: "var(--g66-muted)" }}>
-                        <tr>
-                          {["Estado", "Nombre", "DNI", "País", "Mon.", "Monto nómina", "Monto boleta", "Fecha boleta", "Fila", "Motivo"].map(h => (
-                            <th key={h} style={{ textAlign: "left", padding: "10px 12px", borderBottom: "1px solid var(--g66-border)", whiteSpace: "nowrap" }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {boletaIssueRows.map((row, index) => (
-                          <tr key={`${row.status}-${row.dni}-${row.moneda}-${row.rowNumber ?? index}`} style={{ borderBottom: "1px solid #edf2f7", background: row.severity === "error" ? "#fff7f7" : "#fff" }}>
-                            <td style={{ padding: "9px 12px", fontWeight: 900, color: row.severity === "error" ? "#b91c1c" : "#92400e", whiteSpace: "nowrap" }}>
-                              {row.status === "sin_respuesta" ? "Sin respuesta" :
-                                row.status === "monto_distinto" ? "Monto distinto" :
-                                row.status === "fecha_distinta" ? "Fecha incorrecta" :
-                                row.status === "duplicado" ? "Duplicado" :
-                                row.status === "sin_match" ? "Sin match" :
-                                row.status === "sin_monto" ? "Sin monto" :
-                                row.status === "sin_fecha" ? "Sin fecha" : "OK"}
-                            </td>
-                            <td style={{ padding: "9px 12px", fontWeight: 800, color: "var(--g66-text)", minWidth: 220 }}>{row.nombre}</td>
-                            <td style={{ padding: "9px 12px", color: "var(--g66-muted)", whiteSpace: "nowrap" }}>{row.dni || "—"}</td>
-                            <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>{row.pais || "—"}</td>
-                            <td style={{ padding: "9px 12px", fontWeight: 900, whiteSpace: "nowrap" }}>{row.moneda || "—"}</td>
-                            <td style={{ padding: "9px 12px", textAlign: "right", whiteSpace: "nowrap" }}>{row.expectedAmount ? fmt(row.expectedAmount, 2) : "—"}</td>
-                            <td style={{ padding: "9px 12px", textAlign: "right", whiteSpace: "nowrap" }}>{row.responseAmount === null ? "—" : fmt(row.responseAmount, 2)}</td>
-                            <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>{fmtDate(row.responseDate)}</td>
-                            <td style={{ padding: "9px 12px", color: "var(--g66-muted)", whiteSpace: "nowrap" }}>{row.rowNumber ?? "—"}</td>
-                            <td style={{ padding: "9px 12px", minWidth: 260 }}>{row.reasons.join(" · ")}</td>
+                )}
+
+                {/* Section 1: Gemini Report */}
+                {geminiReport.length > 0 && (
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "var(--g66-text)", marginBottom: 10 }}>
+                      Reporte Gemini — lo que cada persona puso en su boleta
+                    </div>
+                    <div style={{ overflowX: "auto", border: "1px solid var(--g66-border)", borderRadius: 10 }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                        <thead style={{ background: "#f8fafc", color: "var(--g66-muted)" }}>
+                          <tr>
+                            {["Correo (formulario)", "Nombre en boleta", "Monto", "Moneda", "Fecha boleta", "PDF", "Observación"].map(h => (
+                              <th key={h} style={{ textAlign: "left", padding: "9px 12px", borderBottom: "1px solid var(--g66-border)", whiteSpace: "nowrap" }}>{h}</th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {geminiReport.map((row, i) => (
+                            <tr key={i} style={{ borderBottom: "1px solid #edf2f7", background: row.error ? "#fff7f7" : "#fff" }}>
+                              <td style={{ padding: "8px 12px", color: "var(--g66-muted)", whiteSpace: "nowrap" }}>{row.formEmail || "—"}</td>
+                              <td style={{ padding: "8px 12px", fontWeight: 700, color: "var(--g66-text)", minWidth: 200 }}>{row.nombreEnBoleta || "—"}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", whiteSpace: "nowrap", fontWeight: 700 }}>{row.monto !== null ? fmt(row.monto, 2) : "—"}</td>
+                              <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>{row.moneda || "—"}</td>
+                              <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>{row.fecha || "—"}</td>
+                              <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>
+                                {row.fileUrl ? <a href={row.fileUrl} target="_blank" rel="noreferrer" style={{ color: "var(--g66-primary)", fontWeight: 800 }}>Abrir</a> : "—"}
+                              </td>
+                              <td style={{ padding: "8px 12px", color: "#b91c1c", fontSize: 11 }}>{row.error || ""}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Section 2: Cross with nómina */}
+                {showCross && geminiReport.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "var(--g66-text)", marginBottom: 10 }}>
+                      Cruce con nómina — {formatMes(selected?.mes ?? "")}
+                    </div>
+
+                    {/* Summary cards */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(110px, 1fr))", gap: 10, marginBottom: 16 }}>
+                      {[
+                        ["Total esperados", boletaSummary.total, "#f1f5f9", "#334155"],
+                        ["OK", boletaSummary.ok, "#dcfce7", "#166534"],
+                        ["Sin respuesta", boletaSummary.missing, "#fee2e2", "#991b1b"],
+                        ["Monto distinto", boletaSummary.monto_distinto, "#ffedd5", "#9a3412"],
+                        ["Fecha incorrecta", boletaSummary.fecha_incorrecta, "#fef3c7", "#92400e"],
+                        ["Sin monto", boletaSummary.sin_monto, "#ede9fe", "#5b21b6"],
+                      ].map(([label, value, bg, color]) => (
+                        <div key={String(label)} style={{ background: String(bg), color: String(color), borderRadius: 10, padding: "12px 14px", border: "1px solid rgba(0,0,0,0.06)" }}>
+                          <div style={{ fontSize: 11, fontWeight: 800 }}>{label}</div>
+                          <div style={{ fontSize: 24, fontWeight: 950, marginTop: 4 }}>{String(value)}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Cross table */}
+                    <div style={{ overflowX: "auto", border: "1px solid var(--g66-border)", borderRadius: 10 }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                        <thead style={{ background: "#f8fafc", color: "var(--g66-muted)" }}>
+                          <tr>
+                            {["Estado", "Nombre (nómina)", "País", "Mon.", "Monto nómina", "Monto Gemini", "Diferencia", "Fecha boleta", "PDF"].map(h => (
+                              <th key={h} style={{ textAlign: "left", padding: "9px 12px", borderBottom: "1px solid var(--g66-border)", whiteSpace: "nowrap" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {crossRows.map((row, i) => {
+                            const bg = row.status === "ok" ? "#f0fdf4" : row.status === "sin_respuesta" ? "#fff7f7" : "#fffbeb";
+                            const statusColor = row.status === "ok" ? "#166534" : row.status === "sin_respuesta" ? "#b91c1c" : "#92400e";
+                            const statusLabel = row.status === "ok" ? "✓ OK" : row.status === "sin_respuesta" ? "Sin respuesta" : row.status === "monto_distinto" ? "Monto distinto" : row.status === "fecha_incorrecta" ? "Fecha incorrecta" : "Sin monto";
+                            return (
+                              <tr key={i} style={{ borderBottom: "1px solid #edf2f7", background: bg }}>
+                                <td style={{ padding: "9px 12px", fontWeight: 900, whiteSpace: "nowrap", color: statusColor }}>{statusLabel}</td>
+                                <td style={{ padding: "9px 12px", fontWeight: 700, color: "var(--g66-text)", minWidth: 200 }}>{row.nombre}</td>
+                                <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>{row.pais || "—"}</td>
+                                <td style={{ padding: "9px 12px", fontWeight: 900, whiteSpace: "nowrap" }}>{row.moneda}</td>
+                                <td style={{ padding: "9px 12px", textAlign: "right", whiteSpace: "nowrap" }}>{fmt(row.montoNomina, 2)}</td>
+                                <td style={{ padding: "9px 12px", textAlign: "right", whiteSpace: "nowrap" }}>{row.montoGemini !== null ? fmt(row.montoGemini, 2) : "—"}</td>
+                                <td style={{ padding: "9px 12px", textAlign: "right", whiteSpace: "nowrap", color: row.diferencia === null ? "var(--g66-muted)" : row.diferencia > 0 ? "#b91c1c" : row.diferencia < 0 ? "#7c3aed" : "#166534" }}>
+                                  {row.diferencia !== null ? (row.diferencia > 0 ? "+" : "") + fmt(row.diferencia, 2) : "—"}
+                                </td>
+                                <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>{row.fechaGemini || "—"}</td>
+                                <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>
+                                  {row.fileUrl ? <a href={row.fileUrl} target="_blank" rel="noreferrer" style={{ color: "var(--g66-primary)", fontWeight: 800 }}>Abrir</a> : "—"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>
