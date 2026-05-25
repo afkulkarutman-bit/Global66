@@ -1841,7 +1841,7 @@ Revisá los TDC, alertas de empleados sin configurar, y si el total parece razon
     Object.values(totals).forEach(v => { v.total = v.wallet + v.banco; });
     return totals;
   })();
-  const paymentCurrencyOrder = ["CLP", "COP", "ARS", "USD", "EUR"];
+  const paymentCurrencyOrder = ["CLP", "COP", "PEN", "ARS", "USD", "EUR"];
   const failedPaymentChecks = paymentChecks.filter(c => !c.ok);
   const walletDataIssues = calcRows.filter(r => {
     const requiresWallet = r.es_argentina
