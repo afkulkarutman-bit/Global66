@@ -2260,7 +2260,7 @@ Revisá los TDC, alertas de empleados sin configurar, y si el total parece razon
     { key: "argentina" as const, label: `Argentina${argEmployees.length > 0 ? ` (${argEmployees.length})` : ""}` },
     { key: "subidas_sueldo" as const, label: "Subidas de sueldo" },
     { key: "verificacion" as const, label: employees.length > 0 ? `Verificación${totalIssues > 0 ? ` ⚠ ${totalIssues}` : " ✓"}` : "Verificación" },
-    { key: "checkeo_boleta" as const, label: "Checkeo boleta" },
+    { key: "checkeo_boleta" as const, label: "Check boletas" },
   ];
   const editablePayrollHeaders = new Set([
     "Días descuento", "Horas extra", "Otros ingresos", "Desc. Boutique", "Otros descuentos",
@@ -4201,10 +4201,10 @@ Revisá los TDC, alertas de empleados sin configurar, y si el total parece razon
               )
             )}
 
-            {/* TAB: Checkeo boleta */}
+            {/* TAB: Check boletas */}
             {activeTab === "checkeo_boleta" && (
               <div style={{ background: "#fff", border: "1px solid var(--g66-border)", borderRadius: 10, padding: 22, minHeight: 260 }}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: "var(--g66-text)", marginBottom: 6 }}>Checkeo boleta</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "var(--g66-text)", marginBottom: 6 }}>Check boletas</div>
               </div>
             )}
           </div>
