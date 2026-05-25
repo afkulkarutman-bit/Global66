@@ -492,6 +492,36 @@ function normalizeBankDocumentType(value: string | null | undefined) {
   return "DNI";
 }
 
+const ARGENTINA_BANK_DOCUMENTS: Record<string, string> = {
+  "32952335": "20329523358",
+  "36778528": "20367785285",
+  "40188034": "20401880349",
+  "36761838": "27367618383",
+  "32595291": "20325952912",
+  "95808990": "20958089903",
+  "42115945": "23421159459",
+  "41263748": "27412637483",
+  "41317583": "20413175837",
+  "34304305": "20343043059",
+  "41835519": "20418355191",
+  "94438813": "27944388139",
+  "31135732": "27311357323",
+  "93757014": "93757014",
+  "35094639": "27350946395",
+  "42566476": "20425664760",
+  "35459575": "20354595754",
+  "32953405": "27329534052",
+  "95113248": "23951132489",
+};
+
+function getBankDocumentNumber(emp: PayrollEmployee) {
+  const cleaned = String(emp.dni ?? "").replace(/[^\dA-Za-z]/g, "");
+  if (emp.es_argentina || String(emp.pais ?? "").toLowerCase().includes("argentina")) {
+    return ARGENTINA_BANK_DOCUMENTS[cleaned] ?? cleaned;
+  }
+  return cleaned;
+}
+
 function normalizeBankAccountType(value: string | null | undefined) {
   const normalized = String(value ?? "").toLowerCase();
   if (normalized.includes("corriente") || normalized === "cc") return "CC - Cuenta Corriente";
@@ -1675,7 +1705,7 @@ export default function NominasPage() {
         name.nombre,
         name.apellido,
         normalizeBankDocumentType(r.pais),
-        String(r.dni ?? "").replace(/[^\dA-Za-z]/g, ""),
+        getBankDocumentNumber(r),
         normalizeBankAccountType(r.tipo_cuenta),
         String(r.numero_cuenta ?? "").trim(),
         normalizeBankName(r.banco),
