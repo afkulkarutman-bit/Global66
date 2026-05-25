@@ -459,7 +459,7 @@ export default function NominasPage() {
   const [editEmpData, setEditEmpData] = useState({ nombre: "", email_global: "", cargo: "", area: "", centro_costo: "", pais: "", moneda: "USD", sueldo_base: 0, variacion_salario_base: 0, fecha_ingreso: "", fecha_termino: "", es_argentina: false, monto_ars_usd: 0, preferencia_pago: "Banco", correo_wallet: "", usuario_wallet: "", banco: "", tipo_cuenta: "", numero_cuenta: "", observaciones: "" });
   const [commentEmp, setCommentEmp] = useState<PayrollEmployee | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
-  const [activeTab, setActiveTab] = useState<"params" | "comisiones" | "nomina_sin_arg" | "argentina" | "subidas_sueldo" | "verificacion">("params");
+  const [activeTab, setActiveTab] = useState<"params" | "comisiones" | "nomina_sin_arg" | "argentina" | "subidas_sueldo" | "verificacion" | "checkeo_boleta">("params");
   const [expandedFinalCheck, setExpandedFinalCheck] = useState<string | null>(null);
   const [payrollSearch, setPayrollSearch] = useState("");
   const [salarySearch, setSalarySearch] = useState("");
@@ -2260,6 +2260,7 @@ Revisá los TDC, alertas de empleados sin configurar, y si el total parece razon
     { key: "argentina" as const, label: `Argentina${argEmployees.length > 0 ? ` (${argEmployees.length})` : ""}` },
     { key: "subidas_sueldo" as const, label: "Subidas de sueldo" },
     { key: "verificacion" as const, label: employees.length > 0 ? `Verificación${totalIssues > 0 ? ` ⚠ ${totalIssues}` : " ✓"}` : "Verificación" },
+    { key: "checkeo_boleta" as const, label: "Checkeo boleta" },
   ];
   const editablePayrollHeaders = new Set([
     "Días descuento", "Horas extra", "Otros ingresos", "Desc. Boutique", "Otros descuentos",
@@ -4198,6 +4199,13 @@ Revisá los TDC, alertas de empleados sin configurar, y si el total parece razon
                     </div>
                 </div>
               )
+            )}
+
+            {/* TAB: Checkeo boleta */}
+            {activeTab === "checkeo_boleta" && (
+              <div style={{ background: "#fff", border: "1px solid var(--g66-border)", borderRadius: 10, padding: 22, minHeight: 260 }}>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "var(--g66-text)", marginBottom: 6 }}>Checkeo boleta</div>
+              </div>
             )}
           </div>
         )}
