@@ -56,7 +56,7 @@ Responde SOLO con JSON válido, sin texto adicional:
 {"nombre": "<nombre completo o null>", "monto": <número o null>, "moneda": "<moneda o null>", "fecha": "<YYYY-MM-DD o null>"}`;
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -67,7 +67,7 @@ Responde SOLO con JSON válido, sin texto adicional:
             { inline_data: { mime_type: "application/pdf", data: pdfBase64 } },
           ],
         }],
-        generationConfig: { temperature: 0, maxOutputTokens: 256 },
+        generationConfig: { temperature: 0, maxOutputTokens: 1024 },
       }),
     }
   );
