@@ -125,7 +125,7 @@ export default function CalculadoraFechasPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#f8fafc", color: "var(--g66-muted)" }}>
-                  {["Nombre", "País", "Área", "Cargo", "F. ingreso", "1° feedback", "Tipo", "2° feedback"].map(header => (
+                  {["Nombre", "País", "Área", "Cargo", "F. ingreso", "1° feedback", "Área", "2° feedback"].map(header => (
                     <th key={header} style={{ padding: "11px 12px", textAlign: "left", borderBottom: "1px solid var(--g66-border)", fontWeight: 900, whiteSpace: "nowrap" }}>{header}</th>
                   ))}
                 </tr>
@@ -152,7 +152,7 @@ export default function CalculadoraFechasPage() {
                     <td style={{ padding: "10px 12px", whiteSpace: "nowrap", fontWeight: 800, color: "var(--g66-blue)" }}>{formatDate(row.primerFeedback)}</td>
                     <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
                       <span style={{ background: row.b2b ? "#eef2ff" : "#f1f5f9", color: row.b2b ? "var(--g66-blue)" : "var(--g66-muted)", borderRadius: 999, padding: "5px 9px", fontWeight: 900, fontSize: 11 }}>
-                        {row.b2b ? "B2B" : "No B2B"}
+                        {row.b2b ? "B2B" : "Otros"}
                       </span>
                     </td>
                     <td style={{ padding: "10px 12px", whiteSpace: "nowrap", fontWeight: 800, color: "var(--g66-text)" }}>{formatDate(row.segundoFeedback)}</td>

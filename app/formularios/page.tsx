@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
 const cards = [
   {
@@ -34,6 +35,15 @@ const cards = [
 ];
 
 export default function FormulariosPage() {
+  const [copiedHref, setCopiedHref] = useState<string | null>(null);
+
+  async function copyLink(href: string) {
+    const url = `${window.location.origin}${href}`;
+    await navigator.clipboard.writeText(url);
+    setCopiedHref(href);
+    window.setTimeout(() => setCopiedHref(current => current === href ? null : current), 1400);
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: "var(--g66-bg)" }}>
       <header style={{ background: "var(--g66-blue)", padding: "0 24px", position: "sticky", top: 0, zIndex: 50, boxShadow: "0 2px 8px rgba(59,62,219,0.25)" }}>
@@ -60,25 +70,51 @@ export default function FormulariosPage() {
 
         <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
           {cards.map(card => (
-            <Link
+            <div
               key={card.href}
-              href={card.href}
-              target={card.external ? "_blank" : undefined}
-              rel={card.external ? "noreferrer" : undefined}
               className="g66-card"
               style={{
                 padding: 20,
-                textDecoration: "none",
                 display: "flex",
                 flexDirection: "column",
                 minHeight: 150,
                 borderColor: "var(--g66-border)",
               }}
             >
-              <div style={{ fontSize: 18, fontWeight: 900, color: "var(--g66-text)", marginBottom: 8 }}>{card.title}</div>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+                <div style={{ fontSize: 18, fontWeight: 900, color: "var(--g66-text)" }}>{card.title}</div>
+                <button
+                  type="button"
+                  onClick={() => copyLink(card.href)}
+                  title="Copiar link"
+                  aria-label={`Copiar link de ${card.title}`}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    border: "1px solid var(--g66-border)",
+                    background: copiedHref === card.href ? "#dcfce7" : "#fff",
+                    color: copiedHref === card.href ? "#166534" : "var(--g66-blue)",
+                    cursor: "pointer",
+                    fontSize: 15,
+                    fontWeight: 900,
+                    lineHeight: "30px",
+                    flex: "0 0 auto",
+                  }}
+                >
+                  {copiedHref === card.href ? "✓" : "⧉"}
+                </button>
+              </div>
               <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--g66-muted)", flex: 1 }}>{card.description}</div>
-              <div style={{ marginTop: 18, color: "var(--g66-blue)", fontSize: 13, fontWeight: 900 }}>{card.action}</div>
-            </Link>
+              <Link
+                href={card.href}
+                target={card.external ? "_blank" : undefined}
+                rel={card.external ? "noreferrer" : undefined}
+                style={{ marginTop: 18, color: "var(--g66-blue)", fontSize: 13, fontWeight: 900, textDecoration: "none" }}
+              >
+                {card.action}
+              </Link>
+            </div>
           ))}
         </section>
       </main>
