@@ -11,6 +11,8 @@ type EmployeeOption = {
   cargo?: string | null;
 };
 
+type EmployeeSearchOption = EmployeeOption & { email: string };
+
 function cleanEmail(value?: string | null) {
   const email = String(value || "").trim();
   if (!email || email.toUpperCase() === "NA") return "";
@@ -49,6 +51,117 @@ function Textarea({ label, value, onChange, placeholder }: { label: string; valu
           boxSizing: "border-box",
         }}
       />
+    </div>
+  );
+}
+
+function SearchableEmployeeSelect({
+  label,
+  value,
+  onChange,
+  options,
+  loading,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: EmployeeSearchOption[];
+  loading: boolean;
+  placeholder: string;
+}) {
+  const selected = options.find(option => option.email === value);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!value) {
+      setQuery("");
+      return;
+    }
+    const option = options.find(item => item.email === value);
+    setQuery(option ? `${option.nombre} · ${option.email}` : value);
+  }, [options, value]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const filtered = options
+    .filter(option => {
+      if (!normalizedQuery) return true;
+      return `${option.nombre} ${option.email} ${option.cargo || ""}`.toLowerCase().includes(normalizedQuery);
+    })
+    .slice(0, 12);
+
+  const choose = (option: EmployeeSearchOption) => {
+    onChange(option.email);
+    setQuery(`${option.nombre} · ${option.email}`);
+    setOpen(false);
+  };
+
+  const commitTypedEmail = () => {
+    const typed = query.trim().toLowerCase();
+    if (!typed) return;
+    const match = options.find(option => option.email.toLowerCase() === typed);
+    if (match) choose(match);
+  };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <FieldLabel required>{label}</FieldLabel>
+      <input
+        value={query}
+        disabled={loading}
+        onFocus={() => setOpen(true)}
+        onBlur={() => {
+          commitTypedEmail();
+          window.setTimeout(() => setOpen(false), 120);
+        }}
+        onChange={event => {
+          setQuery(event.target.value);
+          onChange("");
+          setOpen(true);
+        }}
+        placeholder={loading ? "Cargando..." : placeholder}
+        style={{
+          width: "100%",
+          border: "1px solid var(--g66-border)",
+          borderRadius: 8,
+          padding: "11px 12px",
+          background: loading ? "#f8fafc" : "#fff",
+          color: "var(--g66-text)",
+          fontSize: 14,
+          boxSizing: "border-box",
+          outline: "none",
+        }}
+      />
+      {open && !loading ? (
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, background: "#fff", border: "1px solid var(--g66-border)", borderRadius: 8, boxShadow: "0 16px 38px rgba(15,23,42,0.16)", zIndex: 20, maxHeight: 320, overflowY: "auto" }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: "12px 14px", color: "var(--g66-muted)", fontSize: 13, fontWeight: 700 }}>Sin resultados</div>
+          ) : filtered.map(option => (
+            <button
+              key={`${label}-${option.id}`}
+              type="button"
+              onMouseDown={event => {
+                event.preventDefault();
+                choose(option);
+              }}
+              style={{
+                width: "100%",
+                display: "block",
+                textAlign: "left",
+                border: 0,
+                background: selected?.email === option.email ? "rgba(59,62,219,0.08)" : "#fff",
+                padding: "10px 12px",
+                cursor: "pointer",
+                borderBottom: "1px solid #eef2f7",
+              }}
+            >
+              <div style={{ color: "var(--g66-text)", fontWeight: 900, fontSize: 13 }}>{option.nombre}</div>
+              <div style={{ color: "var(--g66-muted)", fontSize: 12, marginTop: 2 }}>{option.email}</div>
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -150,38 +263,22 @@ export default function FormularioFeedbackPage() {
 
         <form onSubmit={handleSubmit} style={{ background: "#fff", border: "1px solid var(--g66-border)", borderRadius: 8, overflow: "hidden", boxShadow: "var(--g66-shadow)" }}>
           <div style={{ padding: 22, borderBottom: "1px solid var(--g66-border)", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 18 }}>
-            <div>
-              <FieldLabel required>Mail del evaluador</FieldLabel>
-              <select
-                value={form.evaluador_email}
-                onChange={event => set("evaluador_email")(event.target.value)}
-                disabled={loadingEmployees}
-                style={{ width: "100%", border: "1px solid var(--g66-border)", borderRadius: 8, padding: "11px 12px", background: "#fff", color: "var(--g66-text)", fontSize: 14, boxSizing: "border-box" }}
-              >
-                <option value="">{loadingEmployees ? "Cargando..." : "Selecciona evaluador"}</option>
-                {employeeOptions.map(employee => (
-                  <option key={`evaluador-${employee.id}`} value={employee.email}>
-                    {employee.nombre} · {employee.email}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <FieldLabel required>Mail del evaluado</FieldLabel>
-              <select
-                value={form.evaluado_email}
-                onChange={event => set("evaluado_email")(event.target.value)}
-                disabled={loadingEmployees}
-                style={{ width: "100%", border: "1px solid var(--g66-border)", borderRadius: 8, padding: "11px 12px", background: "#fff", color: "var(--g66-text)", fontSize: 14, boxSizing: "border-box" }}
-              >
-                <option value="">{loadingEmployees ? "Cargando..." : "Selecciona evaluado"}</option>
-                {employeeOptions.map(employee => (
-                  <option key={`evaluado-${employee.id}`} value={employee.email}>
-                    {employee.nombre} · {employee.email}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SearchableEmployeeSelect
+              label="Mail del evaluador"
+              value={form.evaluador_email}
+              onChange={set("evaluador_email")}
+              options={employeeOptions}
+              loading={loadingEmployees}
+              placeholder="Buscar por nombre o mail"
+            />
+            <SearchableEmployeeSelect
+              label="Mail del evaluado"
+              value={form.evaluado_email}
+              onChange={set("evaluado_email")}
+              options={employeeOptions}
+              loading={loadingEmployees}
+              placeholder="Buscar por nombre o mail"
+            />
           </div>
 
           <div style={{ padding: 22, display: "grid", gap: 18 }}>
