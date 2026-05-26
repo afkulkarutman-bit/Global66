@@ -4,9 +4,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import EmployeeModal from "@/components/EmployeeModal";
 import NewEmployeeModal from "@/components/NewEmployeeModal";
-import Dashboard from "@/components/Dashboard";
-import PendingEmployees from "@/components/PendingEmployees";
 import ChatWidget from "@/components/ChatWidget";
+import HeaderNavArrows from "@/components/HeaderNavArrows";
 
 type Employee = {
   id: number;
@@ -230,130 +229,31 @@ export default function Home() {
         position: "sticky", top: 0, zIndex: 100,
         boxShadow: "0 2px 8px rgba(59,62,219,0.25)",
       }}>
-        <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64 }}>
-          {/* Logo */}
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.jpg" alt="Global66" style={{ height: 36, borderRadius: 6, display: "block" }} />
-            <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.3)" }} />
-            <span style={{ color: "#fff", fontWeight: 700, fontSize: 16, letterSpacing: "-0.2px" }}>BOOK</span>
+        <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56 }}>
+          <HeaderNavArrows />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <img src="/logo.jpg" alt="Global66" style={{ height: 32, borderRadius: 6, display: "block" }} />
+            <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.3)" }} />
+            <span style={{ color: "#fff", fontWeight: 700, fontSize: 15, letterSpacing: "-0.2px" }}>BOOK</span>
           </div>
-          {/* Tabs */}
-          <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.12)", borderRadius: 10, padding: 4 }}>
-            {(["empleados", "dashboard", "pendientes"] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                style={{
-                  background: activeTab === tab ? "#fff" : "transparent",
-                  color: activeTab === tab ? "var(--g66-blue)" : "rgba(255,255,255,0.8)",
-                  border: "none",
-                  borderRadius: 7, padding: "7px 18px", fontWeight: activeTab === tab ? 700 : 500,
-                  cursor: "pointer", fontSize: 13, transition: "all 0.15s",
-                  display: "flex", alignItems: "center", gap: 6,
-                }}
-              >
-                {tab === "empleados" ? "Empleados" : tab === "dashboard" ? "Dashboard" : (
-                  <>
-                    Pendientes
-                    {pendingCount > 0 && (
-                      <span style={{
-                        background: activeTab === "pendientes" ? "var(--g66-red)" : "rgba(239,68,68,0.85)",
-                        color: "#fff", borderRadius: 12, fontSize: 11, fontWeight: 700,
-                        padding: "1px 7px", lineHeight: "16px",
-                      }}>
-                        {pendingCount}
-                      </span>
-                    )}
-                  </>
-                )}
-              </button>
-            ))}
-          </div>
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setMenuOpen(o => !o)}
-              style={{
-                background: menuOpen ? "#fff" : "rgba(255,255,255,0.12)",
-                color: menuOpen ? "var(--g66-blue)" : "#fff",
-                border: "1px solid rgba(255,255,255,0.25)",
-                borderRadius: 8, width: 40, height: 40,
-                cursor: "pointer", display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "center", gap: 4,
-              }}
-            >
-              {[0,1,2].map(i => (
-                <span key={i} style={{
-                  display: "block", width: 16, height: 2,
-                  background: menuOpen ? "var(--g66-blue)" : "#fff",
-                  borderRadius: 2,
-                }} />
-              ))}
-            </button>
-
-            {menuOpen && (
-              <>
-                <div style={{ position: "fixed", inset: 0, zIndex: 98 }} onClick={() => setMenuOpen(false)} />
-                <div style={{
-                  position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 99,
-                  background: "#fff", borderRadius: 12, border: "1px solid var(--g66-border)",
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.12)", minWidth: 210, overflow: "hidden",
-                }}>
-                  <a href="/contratos" style={{ display: "block", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", textDecoration: "none", borderBottom: "1px solid var(--g66-border)" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
-                    ⚙️ Contratos
-                  </a>
-                  <a href="/certificados" style={{ display: "block", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", textDecoration: "none", borderBottom: "1px solid var(--g66-border)" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
-                    Certificados
-                  </a>
-                  <a href="/nominas" style={{ display: "block", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", textDecoration: "none", borderBottom: "1px solid var(--g66-border)" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
-                    Nóminas
-                  </a>
-                  <a href="/asistencia" style={{ display: "block", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", textDecoration: "none", borderBottom: "1px solid var(--g66-border)" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
-                    Asistencia
-                  </a>
-                  <a href="/formularios" style={{ display: "block", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", textDecoration: "none", borderBottom: "1px solid var(--g66-border)" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
-                    Formularios
-                  </a>
-                  <a href="/calculadora-fechas" style={{ display: "block", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", textDecoration: "none", borderBottom: "1px solid var(--g66-border)" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
-                    Calculadora fechas
-                  </a>
-                  <button onClick={() => { setShowNew(true); setMenuOpen(false); }}
-                    style={{ display: "block", width: "100%", textAlign: "left", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", background: "none", border: "none", cursor: "pointer", borderBottom: "1px solid var(--g66-border)" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "none")}>
-                    + Nuevo Empleado
-                  </button>
-                  <button onClick={handleLogout}
-                    style={{ display: "block", width: "100%", textAlign: "left", padding: "12px 18px", fontSize: 14, fontWeight: 600, color: "var(--g66-red)", background: "none", border: "none", cursor: "pointer" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#fff5f5")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "none")}>
-                    Cerrar sesión
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          <button
+            onClick={handleLogout}
+            style={{
+              background: "transparent", border: "none",
+              color: "rgba(255,255,255,0.5)", fontSize: 12,
+              cursor: "pointer", fontWeight: 500, padding: "4px 8px",
+              borderRadius: 6,
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = "#fff")}
+            onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}
+          >
+            Salir
+          </button>
         </div>
       </header>
 
       <main style={{ maxWidth: 1400, margin: "0 auto", padding: "24px" }}>
-        {activeTab === "dashboard" && <Dashboard hideSalaries={hideSalaries} />}
-        {activeTab === "pendientes" && (
-          <PendingEmployees onEmployeeUpdated={() => { loadFilters(); }} />
-        )}
-        {activeTab === "empleados" && <>
         {/* Status tabs + stats */}
         <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "stretch" }}>
           {[
@@ -554,7 +454,6 @@ export default function Home() {
             </div>
           )}
         </div>
-        </>}
       </main>
 
       {selected && (
