@@ -114,7 +114,6 @@ export default function CalculadoraFechasPage() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div>
               <h1 style={{ margin: 0, color: "var(--g66-text)", fontSize: 26, fontWeight: 900 }}>Calculadora fechas</h1>
-              <div style={{ marginTop: 4, color: "var(--g66-muted)", fontSize: 13 }}>{rows.length}/{employees.length} activos</div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
               <input
