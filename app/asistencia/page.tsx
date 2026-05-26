@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import HeaderNavArrows from "@/components/HeaderNavArrows";
 
 type AttendanceRow = {
   employee_id: number;
@@ -348,10 +349,7 @@ export default function AsistenciaPage() {
             <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.3)" }} />
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>BOOK</span>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Link href="/" style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.8)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, padding: "9px 16px", fontWeight: 600, fontSize: 13, textDecoration: "none" }}>← Empleados</Link>
-            <div style={{ background: "#fff", color: "var(--g66-blue)", borderRadius: 8, padding: "9px 16px", fontWeight: 700, fontSize: 13 }}>Asistencia</div>
-          </div>
+          <HeaderNavArrows />
         </div>
       </header>
 

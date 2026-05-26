@@ -249,7 +249,6 @@ export default function FormularioFeedbackPage() {
             </Link>
             <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.3)" }} />
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>BOOK</span>
-            <span style={{ background: "#fff", color: "var(--g66-blue)", borderRadius: 8, padding: "8px 14px", fontWeight: 800, fontSize: 13 }}>Formulario feedback</span>
           </div>
           <HeaderNavArrows />
         </div>
