@@ -103,9 +103,26 @@ export default function CalculadoraFechasPage() {
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>BOOK</span>
             <span style={{ background: "#fff", color: "var(--g66-blue)", borderRadius: 8, padding: "8px 14px", fontWeight: 800, fontSize: 13 }}>Calculadora fechas</span>
           </div>
-          <Link href="/formularios" style={{ background: "rgba(255,255,255,0.12)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 8, padding: "9px 16px", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>
-            Formularios
-          </Link>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => window.history.back()}
+              aria-label="Volver atrás"
+              title="Volver atrás"
+              style={{ width: 38, height: 38, borderRadius: 8, border: "1px solid rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.12)", color: "#fff", fontSize: 18, fontWeight: 900, cursor: "pointer" }}
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              onClick={() => window.history.forward()}
+              aria-label="Ir adelante"
+              title="Ir adelante"
+              style={{ width: 38, height: 38, borderRadius: 8, border: "1px solid rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.12)", color: "#fff", fontSize: 18, fontWeight: 900, cursor: "pointer" }}
+            >
+              →
+            </button>
+          </div>
         </div>
       </header>
 
