@@ -171,7 +171,7 @@ export default function ContratosPage() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.jpg" alt="Global66" style={{ height: 36, borderRadius: 6 }} />
         <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.3)' }} />
-        <span style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>People</span>
+        <span style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>BOOK</span>
         <div style={{ flex: 1 }} />
         <a href="/" style={{
           color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: 500,

@@ -2667,7 +2667,7 @@ export default function NominasPage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <a href="/"><img src="/logo.jpg" alt="Global66" style={{ height: 36, borderRadius: 6, cursor: "pointer", display: "block" }} /></a>
             <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.3)" }} />
-            <span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>People</span>
+            <span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>BOOK</span>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <a href="/" style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.8)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, padding: "9px 16px", fontWeight: 600, fontSize: 13, textDecoration: "none" }}>← Empleados</a>
