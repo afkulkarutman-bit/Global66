@@ -324,6 +324,11 @@ export default function Home() {
                     onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
                     Formularios
                   </a>
+                  <a href="/calculadora-fechas" style={{ display: "block", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", textDecoration: "none", borderBottom: "1px solid var(--g66-border)" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
+                    Calculadora fechas
+                  </a>
                   <button onClick={() => { setShowNew(true); setMenuOpen(false); }}
                     style={{ display: "block", width: "100%", textAlign: "left", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", background: "none", border: "none", cursor: "pointer", borderBottom: "1px solid var(--g66-border)" }}
                     onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
