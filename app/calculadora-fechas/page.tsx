@@ -7,6 +7,8 @@ type Employee = {
   id: number;
   dni: string;
   nombre: string;
+  email_global?: string | null;
+  email_personal?: string | null;
   cargo?: string | null;
   area?: string | null;
   centro_costo?: string | null;
@@ -74,6 +76,8 @@ export default function CalculadoraFechasPage() {
         return [
           row.employee.nombre,
           row.employee.dni,
+          row.employee.email_global,
+          row.employee.email_personal,
           row.employee.cargo,
           row.employee.area,
           row.employee.pais,
@@ -112,12 +116,20 @@ export default function CalculadoraFechasPage() {
               <h1 style={{ margin: 0, color: "var(--g66-text)", fontSize: 26, fontWeight: 900 }}>Calculadora fechas</h1>
               <div style={{ marginTop: 4, color: "var(--g66-muted)", fontSize: 13 }}>{rows.length}/{employees.length} activos</div>
             </div>
-            <input
-              value={search}
-              onChange={event => setSearch(event.target.value)}
-              placeholder="Buscar por nombre, DNI, cargo, área, país..."
-              style={{ width: 360, maxWidth: "100%", border: "1px solid var(--g66-border)", borderRadius: 8, padding: "9px 11px", fontSize: 13, outline: "none" }}
-            />
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <input
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+                placeholder="Buscar por nombre, mail, DNI, cargo, área, país..."
+                style={{ width: 360, maxWidth: "100%", border: "1px solid var(--g66-border)", borderRadius: 8, padding: "9px 11px", fontSize: 13, outline: "none" }}
+              />
+              <Link
+                href="/calculadora-fechas/reporte"
+                style={{ background: "var(--g66-blue)", color: "#fff", border: "1px solid var(--g66-blue)", borderRadius: 8, padding: "9px 14px", fontWeight: 900, textDecoration: "none" }}
+              >
+                Reporte
+              </Link>
+            </div>
           </div>
         </section>
 
