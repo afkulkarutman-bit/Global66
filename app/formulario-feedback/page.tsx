@@ -1,8 +1,129 @@
 "use client";
 
 import Link from "next/link";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+
+type EmployeeOption = {
+  id: number;
+  nombre: string;
+  email_global?: string | null;
+  email_personal?: string | null;
+  cargo?: string | null;
+};
+
+function cleanEmail(value?: string | null) {
+  const email = String(value || "").trim();
+  if (!email || email.toUpperCase() === "NA") return "";
+  return email;
+}
+
+function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <label style={{ display: "block", marginBottom: 7, fontSize: 12, fontWeight: 900, color: "#475569", textTransform: "uppercase", letterSpacing: 0 }}>
+      {children}{required ? <span style={{ color: "var(--g66-blue)", marginLeft: 4 }}>*</span> : null}
+    </label>
+  );
+}
+
+function Textarea({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
+  return (
+    <div>
+      <FieldLabel required>{label}</FieldLabel>
+      <textarea
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        placeholder={placeholder}
+        rows={6}
+        style={{
+          width: "100%",
+          resize: "vertical",
+          minHeight: 136,
+          border: "1px solid var(--g66-border)",
+          borderRadius: 8,
+          padding: "12px 14px",
+          background: "#fff",
+          color: "var(--g66-text)",
+          fontSize: 14,
+          lineHeight: 1.5,
+          outline: "none",
+          boxSizing: "border-box",
+        }}
+      />
+    </div>
+  );
+}
 
 export default function FormularioFeedbackPage() {
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    evaluador_email: "",
+    evaluado_email: "",
+    stop: "",
+    start: "",
+    continue: "",
+    aprueba_continuidad: "",
+  });
+
+  useEffect(() => {
+    async function loadEmployees() {
+      setLoadingEmployees(true);
+      const res = await fetch("/api/employees?activo=1&limit=1000");
+      const data = await res.json();
+      setEmployees(Array.isArray(data.employees) ? data.employees : []);
+      setLoadingEmployees(false);
+    }
+    loadEmployees().catch(() => {
+      setError("No se pudieron cargar los empleados activos.");
+      setLoadingEmployees(false);
+    });
+  }, []);
+
+  const employeeOptions = useMemo(() => {
+    return employees
+      .map(employee => {
+        const email = cleanEmail(employee.email_global) || cleanEmail(employee.email_personal);
+        return { ...employee, email };
+      })
+      .filter(employee => employee.email)
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  }, [employees]);
+
+  const set = (key: keyof typeof form) => (value: string) => {
+    setForm(current => ({ ...current, [key]: value }));
+    setError("");
+  };
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!form.evaluador_email) return setError("Selecciona el mail del evaluador.");
+    if (!form.evaluado_email) return setError("Selecciona el mail del evaluado.");
+    if (!form.stop.trim()) return setError("Completa Stop.");
+    if (!form.start.trim()) return setError("Completa Start.");
+    if (!form.continue.trim()) return setError("Completa Continue.");
+    if (!form.aprueba_continuidad) return setError("Indica si se aprueba continuidad.");
+
+    setSubmitting(true);
+    const res = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    const data = await res.json();
+    setSubmitting(false);
+
+    if (!res.ok) {
+      setError(data.error || "No se pudo guardar el feedback.");
+      return;
+    }
+
+    setDone(true);
+    setForm({ evaluador_email: "", evaluado_email: "", stop: "", start: "", continue: "", aprueba_continuidad: "" });
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: "var(--g66-bg)" }}>
       <header style={{ background: "var(--g66-blue)", padding: "0 24px", position: "sticky", top: 0, zIndex: 50, boxShadow: "0 2px 8px rgba(59,62,219,0.25)" }}>
@@ -21,6 +142,95 @@ export default function FormularioFeedbackPage() {
           </Link>
         </div>
       </header>
+      <main style={{ maxWidth: 980, margin: "0 auto", padding: "32px 24px 56px" }}>
+        <section style={{ marginBottom: 24 }}>
+          <div style={{ color: "var(--g66-muted)", fontSize: 13, fontWeight: 800, textTransform: "uppercase", marginBottom: 8 }}>Primer feedback</div>
+          <h1 style={{ margin: 0, color: "var(--g66-text)", fontSize: 34, lineHeight: 1.1 }}>Feedback líder</h1>
+        </section>
+
+        <form onSubmit={handleSubmit} style={{ background: "#fff", border: "1px solid var(--g66-border)", borderRadius: 8, overflow: "hidden", boxShadow: "var(--g66-shadow)" }}>
+          <div style={{ padding: 22, borderBottom: "1px solid var(--g66-border)", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 18 }}>
+            <div>
+              <FieldLabel required>Mail del evaluador</FieldLabel>
+              <select
+                value={form.evaluador_email}
+                onChange={event => set("evaluador_email")(event.target.value)}
+                disabled={loadingEmployees}
+                style={{ width: "100%", border: "1px solid var(--g66-border)", borderRadius: 8, padding: "11px 12px", background: "#fff", color: "var(--g66-text)", fontSize: 14, boxSizing: "border-box" }}
+              >
+                <option value="">{loadingEmployees ? "Cargando..." : "Selecciona evaluador"}</option>
+                {employeeOptions.map(employee => (
+                  <option key={`evaluador-${employee.id}`} value={employee.email}>
+                    {employee.nombre} · {employee.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <FieldLabel required>Mail del evaluado</FieldLabel>
+              <select
+                value={form.evaluado_email}
+                onChange={event => set("evaluado_email")(event.target.value)}
+                disabled={loadingEmployees}
+                style={{ width: "100%", border: "1px solid var(--g66-border)", borderRadius: 8, padding: "11px 12px", background: "#fff", color: "var(--g66-text)", fontSize: 14, boxSizing: "border-box" }}
+              >
+                <option value="">{loadingEmployees ? "Cargando..." : "Selecciona evaluado"}</option>
+                {employeeOptions.map(employee => (
+                  <option key={`evaluado-${employee.id}`} value={employee.email}>
+                    {employee.nombre} · {employee.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ padding: 22, display: "grid", gap: 18 }}>
+            <Textarea label="Stop" value={form.stop} onChange={set("stop")} placeholder="Qué debe dejar de hacer o reducir." />
+            <Textarea label="Start" value={form.start} onChange={set("start")} placeholder="Qué debe empezar a hacer." />
+            <Textarea label="Continue" value={form.continue} onChange={set("continue")} placeholder="Qué debe seguir haciendo." />
+
+            <div>
+              <FieldLabel required>Se aprueba continuidad</FieldLabel>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {[
+                  { value: "si", label: "Sí" },
+                  { value: "no", label: "No" },
+                ].map(option => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => set("aprueba_continuidad")(option.value)}
+                    style={{
+                      border: form.aprueba_continuidad === option.value ? "1px solid var(--g66-blue)" : "1px solid var(--g66-border)",
+                      background: form.aprueba_continuidad === option.value ? "rgba(59,62,219,0.09)" : "#fff",
+                      color: form.aprueba_continuidad === option.value ? "var(--g66-blue)" : "var(--g66-text)",
+                      borderRadius: 8,
+                      padding: "10px 18px",
+                      fontWeight: 900,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {error ? <div style={{ background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 8, padding: "11px 13px", fontWeight: 800, fontSize: 13 }}>{error}</div> : null}
+            {done ? <div style={{ background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0", borderRadius: 8, padding: "11px 13px", fontWeight: 800, fontSize: 13 }}>Feedback guardado correctamente.</div> : null}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid var(--g66-border)", paddingTop: 18 }}>
+              <button
+                type="submit"
+                disabled={submitting}
+                style={{ background: "var(--g66-blue)", color: "#fff", border: 0, borderRadius: 8, padding: "12px 20px", fontWeight: 900, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.7 : 1 }}
+              >
+                {submitting ? "Guardando..." : "Guardar feedback"}
+              </button>
+            </div>
+          </div>
+        </form>
+      </main>
     </div>
   );
 }
