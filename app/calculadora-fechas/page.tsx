@@ -66,7 +66,8 @@ export default function CalculadoraFechasPage() {
         const primerFeedback = ingreso ? addDays(ingreso, 90) : null;
         const b2b = isB2B(employee);
         const segundoFeedback = primerFeedback ? addMonthsAndHalf(primerFeedback, b2b ? 3 : 2) : null;
-        return { employee, ingreso, primerFeedback, segundoFeedback, b2b };
+        const tercerFeedback = ingreso && b2b ? addMonthsAndHalf(ingreso, 5) : null;
+        return { employee, ingreso, primerFeedback, segundoFeedback, tercerFeedback, b2b };
       })
       .filter(row => {
         if (!q) return true;
@@ -125,7 +126,7 @@ export default function CalculadoraFechasPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#f8fafc", color: "var(--g66-muted)" }}>
-                  {["Nombre", "País", "Área", "Cargo", "F. ingreso", "1° feedback", "Área", "2° feedback"].map(header => (
+                  {["Nombre", "País", "Área", "Cargo", "F. ingreso", "1° feedback", "Área", "2° feedback", "3° feedback"].map(header => (
                     <th key={header} style={{ padding: "11px 12px", textAlign: "left", borderBottom: "1px solid var(--g66-border)", fontWeight: 900, whiteSpace: "nowrap" }}>{header}</th>
                   ))}
                 </tr>
@@ -133,11 +134,11 @@ export default function CalculadoraFechasPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} style={{ padding: 18, color: "var(--g66-muted)", textAlign: "center" }}>Cargando...</td>
+                    <td colSpan={9} style={{ padding: 18, color: "var(--g66-muted)", textAlign: "center" }}>Cargando...</td>
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ padding: 18, color: "var(--g66-muted)", textAlign: "center" }}>Sin resultados</td>
+                    <td colSpan={9} style={{ padding: 18, color: "var(--g66-muted)", textAlign: "center" }}>Sin resultados</td>
                   </tr>
                 ) : rows.map(row => (
                   <tr key={row.employee.id} style={{ borderBottom: "1px solid var(--g66-border)" }}>
@@ -156,6 +157,7 @@ export default function CalculadoraFechasPage() {
                       </span>
                     </td>
                     <td style={{ padding: "10px 12px", whiteSpace: "nowrap", fontWeight: 800, color: "var(--g66-text)" }}>{formatDate(row.segundoFeedback)}</td>
+                    <td style={{ padding: "10px 12px", whiteSpace: "nowrap", fontWeight: 800, color: row.b2b ? "var(--g66-text)" : "var(--g66-muted)" }}>{formatDate(row.tercerFeedback)}</td>
                   </tr>
                 ))}
               </tbody>
