@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import HeaderNavArrows from "@/components/HeaderNavArrows";
+import { detectContractStage, STAGE_LABELS } from "@/lib/contractStage";
 
 type Employee = {
   id: number;
@@ -23,6 +24,7 @@ type FeedbackResponse = {
   tipo_feedback: string;
   evaluado_employee_id?: number | null;
   evaluado_email?: string | null;
+  aprueba_continuidad?: boolean | null;
 };
 
 function parseDate(value?: string | null) {
@@ -161,6 +163,26 @@ export default function ReporteFeedbackPage() {
       return answeredKeys.has(`id:${row.employee.id}`) || (!!email && answeredKeys.has(`email:${email}`));
     };
 
+    // Approved feedbacks per employee (aprueba_continuidad = true)
+    const approvedCountById = new Map<number, number>();
+    const approvedCountByEmail = new Map<string, number>();
+    for (const fb of feedbackResponses) {
+      if (!fb.aprueba_continuidad) continue;
+      if (fb.evaluado_employee_id) {
+        approvedCountById.set(fb.evaluado_employee_id, (approvedCountById.get(fb.evaluado_employee_id) ?? 0) + 1);
+      }
+      if (fb.evaluado_email) {
+        const e = fb.evaluado_email.toLowerCase();
+        approvedCountByEmail.set(e, (approvedCountByEmail.get(e) ?? 0) + 1);
+      }
+    }
+    const getApprovedCount = (row: typeof rows[number]) => {
+      const byId = approvedCountById.get(row.employee.id) ?? 0;
+      const email = primaryEmail(row.employee).toLowerCase();
+      const byEmail = email ? (approvedCountByEmail.get(email) ?? 0) : 0;
+      return Math.max(byId, byEmail);
+    };
+
     const decorated = rows.map(row => {
       const answered = hasAnswer(row);
       const answeredThisMonthForEmployee = answeredThisMonth.some(response => {
@@ -173,7 +195,9 @@ export default function ReporteFeedbackPage() {
       const secondThisWeek = isBetween(row.segundoFeedback, weekStart, weekEnd);
       const thirdThisWeek = isBetween(row.tercerFeedback, weekStart, weekEnd);
       const needsAction = (!answered && firstThisMonth) || secondThisWeek || thirdThisWeek || answeredThisMonthForEmployee;
-      return { ...row, answered, answeredThisMonthForEmployee, firstDueSoon3, firstDueSoon5, firstThisMonth, secondThisWeek, thirdThisWeek, needsAction };
+      const approvedCount = getApprovedCount(row);
+      const suggestedStage = detectContractStage(row.employee, approvedCount);
+      return { ...row, answered, answeredThisMonthForEmployee, firstDueSoon3, firstDueSoon5, firstThisMonth, secondThisWeek, thirdThisWeek, needsAction, approvedCount, suggestedStage };
     });
 
     const q = search.trim().toLowerCase();
@@ -283,7 +307,7 @@ export default function ReporteFeedbackPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr style={{ background: "#f8fafc", color: "var(--g66-muted)" }}>
-                  {["Persona", "Mail", "País", "1° feedback", "Estado 1°", "2° feedback", "3° feedback"].map(header => (
+                  {["Persona", "Mail", "País", "1° feedback", "Estado 1°", "Aprueba", "Contrato", "2° feedback", "3° feedback"].map(header => (
                     <th key={header} style={{ padding: "10px 11px", textAlign: "left", borderBottom: "1px solid var(--g66-border)", fontWeight: 900, whiteSpace: "nowrap" }}>{header}</th>
                   ))}
                 </tr>
@@ -291,11 +315,11 @@ export default function ReporteFeedbackPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} style={{ padding: 18, color: "var(--g66-muted)", textAlign: "center" }}>Cargando...</td>
+                    <td colSpan={9} style={{ padding: 18, color: "var(--g66-muted)", textAlign: "center" }}>Cargando...</td>
                   </tr>
                 ) : report.rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ padding: 18, color: "var(--g66-muted)", textAlign: "center" }}>Sin resultados</td>
+                    <td colSpan={9} style={{ padding: 18, color: "var(--g66-muted)", textAlign: "center" }}>Sin resultados</td>
                   </tr>
                 ) : report.rows.map(row => {
                   const status = row.answeredThisMonthForEmployee ? "Respondido este mes" : row.answered ? "Respondido" : row.firstDueSoon3 ? "Pendiente 3 días" : row.firstDueSoon5 ? "Pendiente 5 días" : row.firstThisMonth ? "Enviar este mes" : "Sin acción";
@@ -311,6 +335,21 @@ export default function ReporteFeedbackPage() {
                       <td style={{ padding: "10px 11px", whiteSpace: "nowrap" }}>
                         <span style={{ borderRadius: 999, padding: "4px 8px", fontWeight: 900, background: row.answered ? "#dcfce7" : row.firstDueSoon3 ? "#fee2e2" : row.firstDueSoon5 ? "#fef3c7" : row.firstThisMonth ? "#dbeafe" : "#f1f5f9", color: row.answered ? "#166534" : row.firstDueSoon3 ? "#991b1b" : row.firstDueSoon5 ? "#92400e" : row.firstThisMonth ? "#1d4ed8" : "var(--g66-muted)" }}>
                           {status}
+                        </span>
+                      </td>
+                      <td style={{ padding: "10px 11px", whiteSpace: "nowrap" }}>
+                        {row.approvedCount > 0
+                          ? <span style={{ borderRadius: 999, padding: "3px 8px", fontWeight: 900, background: "#dcfce7", color: "#166534" }}>Sí ({row.approvedCount})</span>
+                          : <span style={{ borderRadius: 999, padding: "3px 8px", fontWeight: 700, background: "#f1f5f9", color: "var(--g66-muted)" }}>—</span>
+                        }
+                      </td>
+                      <td style={{ padding: "10px 11px", whiteSpace: "nowrap" }}>
+                        <span style={{
+                          borderRadius: 999, padding: "3px 8px", fontWeight: 900,
+                          background: row.suggestedStage === "indefinido" ? "#dbeafe" : row.suggestedStage === "extension_6m" ? "#fef3c7" : "#f1f5f9",
+                          color: row.suggestedStage === "indefinido" ? "#1d4ed8" : row.suggestedStage === "extension_6m" ? "#92400e" : "var(--g66-muted)",
+                        }}>
+                          {STAGE_LABELS[row.suggestedStage]}
                         </span>
                       </td>
                       <td style={{ padding: "10px 11px", whiteSpace: "nowrap", fontWeight: 800, color: row.secondThisWeek ? "var(--g66-blue)" : "var(--g66-muted)" }}>{formatDate(row.segundoFeedback)}</td>

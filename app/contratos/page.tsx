@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import HeaderNavArrows from "@/components/HeaderNavArrows";
+import { STAGE_LABELS, type ContractStage } from "@/lib/contractStage";
 
 type Employee = {
   id: number;
@@ -21,6 +22,13 @@ type Employee = {
   jefatura: string | null;
   activo: number;
   sexo: string;
+};
+
+type PendingContract = Employee & {
+  stage: ContractStage;
+  fecha_termino_sugerida: string | null;
+  approved_feedbacks: number;
+  b2b: boolean;
 };
 
 const SENIOR_KEYWORDS = ['head','lead','vp','director','chief','country manager','clevel','c-level','ceo','cto','coo','cfo','cpo'];
@@ -83,6 +91,56 @@ export default function ContratosPage() {
   const [templateOverride, setTemplateOverride] = useState<string>('');
 
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // Pending contracts
+  const [pending, setPending] = useState<PendingContract[]>([]);
+  const [loadingPending, setLoadingPending] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch('/api/contratos?pending=true')
+      .then(r => r.json())
+      .then(d => setPending(Array.isArray(d) ? d : []))
+      .finally(() => setLoadingPending(false));
+  }, []);
+
+  const handleDownloadPending = async (emp: PendingContract) => {
+    setDownloadingId(emp.id);
+    try {
+      const body = {
+        empleado: emp,
+        fecha_redaccion: todayIso(),
+        fecha_termino: emp.fecha_termino_sugerida ?? undefined,
+        monto_movilizacion: 0,
+        monto_colacion: 0,
+        monto_conexion: 0,
+      };
+      const res = await fetch('/api/contratos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) { const err = await res.json(); alert('Error: ' + err.error); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Contrato_${emp.nombre.replace(/\s+/g, '_')}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      // Track generation
+      await fetch('/api/contratos/generated', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: emp.id, stage: emp.stage }),
+      });
+      setPending(prev => prev.filter(p => !(p.id === emp.id && p.stage === emp.stage)));
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const autoTemplate = selected ? detectTemplate(selected.pais ?? '', selected.cargo ?? '') : null;
   const effectiveTemplate: TemplateKey = (templateOverride as TemplateKey) || autoTemplate || 'chile';
@@ -180,10 +238,77 @@ export default function ContratosPage() {
         </div>
       </header>
 
+      {/* Pending contracts */}
+      <div style={{ maxWidth: 1100, margin: '28px auto 0', padding: '0 20px' }}>
+        <div style={{ background: '#fff', borderRadius: 10, boxShadow: '0 1px 6px rgba(0,0,0,0.08)', overflow: 'hidden', marginBottom: 24 }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--g66-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontWeight: 900, fontSize: 15, color: 'var(--g66-text)' }}>
+              Pendientes de contrato
+              {!loadingPending && <span style={{ marginLeft: 8, background: pending.length > 0 ? 'var(--g66-blue)' : '#f1f5f9', color: pending.length > 0 ? '#fff' : 'var(--g66-muted)', borderRadius: 999, fontSize: 12, fontWeight: 700, padding: '2px 8px' }}>{pending.length}</span>}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--g66-muted)' }}>Empleados con feedback aprobado listos para generar contrato</div>
+          </div>
+          {loadingPending ? (
+            <div style={{ padding: 20, color: 'var(--g66-muted)', fontSize: 13 }}>Cargando...</div>
+          ) : pending.length === 0 ? (
+            <div style={{ padding: 20, color: 'var(--g66-muted)', fontSize: 13 }}>Sin pendientes — todos los contratos están al día.</div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#f8fafc' }}>
+                  {['Nombre', 'Cargo', 'País', 'Tipo de contrato', 'Fecha término', ''].map(h => (
+                    <th key={h} style={{ padding: '9px 14px', textAlign: 'left', borderBottom: '1px solid var(--g66-border)', fontWeight: 800, fontSize: 11, color: 'var(--g66-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pending.map(emp => (
+                  <tr key={`${emp.id}-${emp.stage}`} style={{ borderBottom: '1px solid var(--g66-border)' }}>
+                    <td style={{ padding: '10px 14px', fontWeight: 800 }}>
+                      {emp.nombre}
+                      {emp.b2b && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, background: '#ede9fe', color: '#6d28d9', borderRadius: 4, padding: '1px 5px' }}>B2B</span>}
+                    </td>
+                    <td style={{ padding: '10px 14px', color: 'var(--g66-muted)' }}>{emp.cargo}</td>
+                    <td style={{ padding: '10px 14px', color: 'var(--g66-muted)' }}>{emp.pais}</td>
+                    <td style={{ padding: '10px 14px' }}>
+                      <span style={{
+                        borderRadius: 999, padding: '3px 9px', fontWeight: 800, fontSize: 12,
+                        background: emp.stage === 'indefinido' ? '#dbeafe' : emp.stage === 'extension_6m' ? '#fef3c7' : '#f1f5f9',
+                        color: emp.stage === 'indefinido' ? '#1d4ed8' : emp.stage === 'extension_6m' ? '#92400e' : '#374151',
+                      }}>
+                        {STAGE_LABELS[emp.stage]}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 14px', fontWeight: 700, color: emp.fecha_termino_sugerida ? 'var(--g66-text)' : 'var(--g66-muted)' }}>
+                      {emp.fecha_termino_sugerida ?? 'Indefinido'}
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                      <button
+                        onClick={() => handleDownloadPending(emp)}
+                        disabled={downloadingId === emp.id}
+                        style={{
+                          background: downloadingId === emp.id ? 'var(--g66-border)' : 'var(--g66-blue)',
+                          color: '#fff', border: 'none', borderRadius: 7,
+                          padding: '7px 14px', fontWeight: 800, fontSize: 12,
+                          cursor: downloadingId === emp.id ? 'default' : 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {downloadingId === emp.id ? '…' : '↓ Descargar contrato'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
       {/* Layout */}
       <div style={{
         display: 'flex', gap: 24, maxWidth: 1100,
-        margin: '28px auto', padding: '0 20px', alignItems: 'flex-start',
+        margin: '0 auto 28px', padding: '0 20px', alignItems: 'flex-start',
       }}>
 
         {/* Left panel — employee search */}

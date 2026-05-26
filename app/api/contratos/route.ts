@@ -4,6 +4,7 @@ import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import fs from 'fs';
 import path from 'path';
+import { detectContractStage, calcFechaTermino, isB2B } from '@/lib/contractStage';
 
 // ---- Number to Spanish words ----
 const UNITS = ['','uno','dos','tres','cuatro','cinco','seis','siete','ocho','nueve',
@@ -59,11 +60,62 @@ function formatDateLong(dateStr: string): string {
   return `${d.getDate()} de ${MONTHS_ES[d.getMonth()]} de ${d.getFullYear()}`;
 }
 
-// ---- Search endpoint ----
+// ---- Search / pending endpoint ----
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const q = searchParams.get('q') ?? '';
 
+  // Pending contracts list
+  if (searchParams.get('pending') === 'true') {
+    // 1. Get all approved feedbacks
+    const { data: feedbacks } = await supabaseAdmin
+      .from('feedback_responses')
+      .select('evaluado_employee_id, aprueba_continuidad, tipo_feedback')
+      .eq('aprueba_continuidad', true);
+
+    if (!feedbacks?.length) return NextResponse.json([]);
+
+    // 2. Count approved feedbacks per employee
+    const countByEmployee = new Map<number, number>();
+    for (const fb of feedbacks) {
+      if (!fb.evaluado_employee_id) continue;
+      countByEmployee.set(fb.evaluado_employee_id, (countByEmployee.get(fb.evaluado_employee_id) ?? 0) + 1);
+    }
+
+    const employeeIds = [...countByEmployee.keys()];
+    if (!employeeIds.length) return NextResponse.json([]);
+
+    // 3. Get employee data
+    const { data: employees } = await supabaseAdmin
+      .from('employees')
+      .select('id,nombre,dni,cargo,area,centro_costo,pais,moneda,sueldo_local,salario_bruto,fecha_ingreso,fecha_termino,email_personal,email_global,domicilio,tipo_contrato,jefatura,activo,sexo')
+      .in('id', employeeIds)
+      .eq('activo', 1);
+
+    if (!employees?.length) return NextResponse.json([]);
+
+    // 4. Get already-generated contracts
+    const { data: generated } = await supabaseAdmin
+      .from('contracts_generated')
+      .select('employee_id, stage')
+      .in('employee_id', employeeIds);
+
+    const generatedKeys = new Set((generated ?? []).map(g => `${g.employee_id}:${g.stage}`));
+
+    // 5. Build pending list
+    const pending = employees.flatMap(emp => {
+      const approvedCount = countByEmployee.get(emp.id) ?? 0;
+      const stage = detectContractStage(emp, approvedCount);
+      const key = `${emp.id}:${stage}`;
+      if (generatedKeys.has(key)) return [];
+      const fecha_termino = calcFechaTermino(emp.fecha_ingreso, stage);
+      return [{ ...emp, stage, fecha_termino_sugerida: fecha_termino, approved_feedbacks: approvedCount, b2b: isB2B(emp) }];
+    });
+
+    return NextResponse.json(pending);
+  }
+
+  // Search by name/dni
+  const q = searchParams.get('q') ?? '';
   if (q.length < 2) return NextResponse.json([]);
 
   const { data } = await supabaseAdmin
