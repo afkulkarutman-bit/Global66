@@ -31,6 +31,13 @@ const cards = [
     action: "Abrir formulario",
     external: false,
   },
+  {
+    title: "Calculadora fechas",
+    description: "Herramienta para cálculos de fechas.",
+    href: "/calculadora-fechas",
+    action: "Abrir calculadora",
+    external: false,
+  },
 ];
 
 export default function FormulariosPage() {
