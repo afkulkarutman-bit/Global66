@@ -104,6 +104,7 @@ export default function ReporteFeedbackPage() {
   const [feedbackResponses, setFeedbackResponses] = useState<FeedbackResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"accion" | "todos">("accion");
 
   useEffect(() => {
     Promise.all([
@@ -161,18 +162,24 @@ export default function ReporteFeedbackPage() {
 
     const decorated = rows.map(row => {
       const answered = hasAnswer(row);
+      const answeredThisMonthForEmployee = answeredThisMonth.some(response => {
+        const email = primaryEmail(row.employee).toLowerCase();
+        return response.evaluado_employee_id === row.employee.id || (!!email && response.evaluado_email?.toLowerCase() === email);
+      });
       const firstDueSoon3 = !answered && isBetween(row.primerFeedback, today, inThreeDays);
       const firstDueSoon5 = !answered && isBetween(row.primerFeedback, today, inFiveDays);
       const firstThisMonth = isSameMonth(row.primerFeedback, now);
       const secondThisWeek = isBetween(row.segundoFeedback, weekStart, weekEnd);
       const thirdThisWeek = isBetween(row.tercerFeedback, weekStart, weekEnd);
-      return { ...row, answered, firstDueSoon3, firstDueSoon5, firstThisMonth, secondThisWeek, thirdThisWeek };
+      const needsAction = (!answered && firstThisMonth) || secondThisWeek || thirdThisWeek || answeredThisMonthForEmployee;
+      return { ...row, answered, answeredThisMonthForEmployee, firstDueSoon3, firstDueSoon5, firstThisMonth, secondThisWeek, thirdThisWeek, needsAction };
     });
 
     const q = search.trim().toLowerCase();
-    const filtered = decorated.filter(row => {
+    const visibleRows = viewMode === "accion" ? decorated.filter(row => row.needsAction) : decorated;
+    const filtered = visibleRows.filter(row => {
       if (!q) return true;
-      return [
+      const haystack = [
         row.employee.nombre,
         row.employee.dni,
         row.employee.email_global,
@@ -180,7 +187,8 @@ export default function ReporteFeedbackPage() {
         row.employee.cargo,
         row.employee.area,
         row.employee.pais,
-      ].some(value => String(value ?? "").toLowerCase().includes(q));
+      ].join(" ").toLowerCase();
+      return haystack.includes(q);
     });
 
     return {
@@ -191,11 +199,12 @@ export default function ReporteFeedbackPage() {
         firstPendingThreeDays: decorated.filter(row => row.firstDueSoon3).length,
         secondSentThisWeek: decorated.filter(row => row.secondThisWeek).length,
         thirdSentThisWeek: decorated.filter(row => row.thirdThisWeek).length,
+        activeActions: decorated.filter(row => row.needsAction).length,
       },
       rows: filtered,
       periodLabel: `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`,
     };
-  }, [employees, feedbackResponses, search]);
+  }, [employees, feedbackResponses, search, viewMode]);
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--g66-bg)" }}>
@@ -222,37 +231,55 @@ export default function ReporteFeedbackPage() {
             <div>
               <h1 style={{ margin: 0, color: "var(--g66-text)", fontSize: 26, fontWeight: 900 }}>Reporte feedback</h1>
               <div style={{ marginTop: 4, color: "var(--g66-muted)", fontSize: 13, fontWeight: 700 }}>
-                Semana actual: {report.periodLabel}. Por ahora “enviado” significa que corresponde enviar según calendario.
+                Semana actual: {report.periodLabel}. Vista enfocada en personas con acción.
               </div>
             </div>
-            <input
-              value={search}
-              onChange={event => setSearch(event.target.value)}
-              placeholder="Buscar por persona, mail, nombre, apellido, DNI..."
-              style={{ width: 420, maxWidth: "100%", border: "1px solid var(--g66-border)", borderRadius: 8, padding: "9px 11px", fontSize: 13, outline: "none" }}
-            />
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <div style={{ display: "flex", border: "1px solid var(--g66-border)", borderRadius: 8, overflow: "hidden", background: "#fff" }}>
+                {[
+                  { value: "accion" as const, label: "Con acción" },
+                  { value: "todos" as const, label: "Todas" },
+                ].map(option => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setViewMode(option.value)}
+                    style={{ border: 0, borderRight: option.value === "accion" ? "1px solid var(--g66-border)" : 0, background: viewMode === option.value ? "var(--g66-blue)" : "#fff", color: viewMode === option.value ? "#fff" : "var(--g66-muted)", padding: "9px 12px", fontWeight: 900, cursor: "pointer" }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <input
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+                placeholder="Buscar por persona, mail, nombre, apellido, DNI..."
+                style={{ width: 420, maxWidth: "100%", border: "1px solid var(--g66-border)", borderRadius: 8, padding: "9px 11px", fontSize: 13, outline: "none" }}
+              />
+            </div>
           </div>
         </section>
 
         <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12, marginBottom: 14 }}>
           {[
-            ["Primer feedback enviado este mes", report.metrics.firstSentThisMonth],
-            ["Primer feedback respondido este mes", report.metrics.firstAnsweredThisMonth],
-            ["Pendiente por vencer en 5 días", report.metrics.firstPendingFiveDays],
-            ["Pendiente por vencer en 3 días", report.metrics.firstPendingThreeDays],
-            ["Segundo feedback enviado esta semana", report.metrics.secondSentThisWeek],
-            ["Tercer feedback enviado esta semana", report.metrics.thirdSentThisWeek],
-          ].map(([label, value]) => (
-            <div key={String(label)} className="g66-card" style={{ padding: 16 }}>
+            ["Acciones en pantalla", report.metrics.activeActions, "#2563eb"],
+            ["Primer feedback enviado este mes", report.metrics.firstSentThisMonth, "#111827"],
+            ["Primer feedback respondido este mes", report.metrics.firstAnsweredThisMonth, "#15803d"],
+            ["Pendiente por vencer en 5 días", report.metrics.firstPendingFiveDays, "#b45309"],
+            ["Pendiente por vencer en 3 días", report.metrics.firstPendingThreeDays, "#b91c1c"],
+            ["Segundo feedback enviado esta semana", report.metrics.secondSentThisWeek, "#4338ca"],
+            ["Tercer feedback enviado esta semana", report.metrics.thirdSentThisWeek, "#4338ca"],
+          ].map(([label, value, color]) => (
+            <div key={String(label)} className="g66-card" style={{ padding: 16, borderLeft: `4px solid ${color}` }}>
               <div style={{ color: "var(--g66-muted)", fontSize: 11, fontWeight: 900, textTransform: "uppercase", lineHeight: 1.25 }}>{label}</div>
-              <div style={{ color: "var(--g66-text)", fontSize: 30, fontWeight: 950, marginTop: 9 }}>{value}</div>
+              <div style={{ color: String(color), fontSize: 30, fontWeight: 950, marginTop: 9 }}>{value}</div>
             </div>
           ))}
         </section>
 
         <section className="g66-card" style={{ overflow: "hidden" }}>
           <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--g66-border)", color: "var(--g66-muted)", fontSize: 12, fontWeight: 800 }}>
-            {loading ? "Cargando..." : `${report.rows.length} personas encontradas`}
+            {loading ? "Cargando..." : viewMode === "accion" ? `${report.rows.length} personas con acción` : `${report.rows.length} personas encontradas`}
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -273,7 +300,7 @@ export default function ReporteFeedbackPage() {
                     <td colSpan={7} style={{ padding: 18, color: "var(--g66-muted)", textAlign: "center" }}>Sin resultados</td>
                   </tr>
                 ) : report.rows.map(row => {
-                  const status = row.answered ? "Respondido" : row.firstDueSoon3 ? "Pendiente 3 días" : row.firstDueSoon5 ? "Pendiente 5 días" : row.firstThisMonth ? "Enviar este mes" : "Sin acción";
+                  const status = row.answeredThisMonthForEmployee ? "Respondido este mes" : row.answered ? "Respondido" : row.firstDueSoon3 ? "Pendiente 3 días" : row.firstDueSoon5 ? "Pendiente 5 días" : row.firstThisMonth ? "Enviar este mes" : "Sin acción";
                   return (
                     <tr key={row.employee.id} style={{ borderBottom: "1px solid var(--g66-border)" }}>
                       <td style={{ padding: "10px 11px", fontWeight: 800, color: "var(--g66-text)", minWidth: 220 }}>
@@ -284,7 +311,7 @@ export default function ReporteFeedbackPage() {
                       <td style={{ padding: "10px 11px", color: "var(--g66-muted)", whiteSpace: "nowrap" }}>{row.employee.pais ?? "-"}</td>
                       <td style={{ padding: "10px 11px", whiteSpace: "nowrap", fontWeight: 800 }}>{formatDate(row.primerFeedback)}</td>
                       <td style={{ padding: "10px 11px", whiteSpace: "nowrap" }}>
-                        <span style={{ borderRadius: 999, padding: "4px 8px", fontWeight: 900, background: row.answered ? "#dcfce7" : row.firstDueSoon3 ? "#fee2e2" : row.firstDueSoon5 ? "#fef3c7" : "#f1f5f9", color: row.answered ? "#166534" : row.firstDueSoon3 ? "#991b1b" : row.firstDueSoon5 ? "#92400e" : "var(--g66-muted)" }}>
+                        <span style={{ borderRadius: 999, padding: "4px 8px", fontWeight: 900, background: row.answered ? "#dcfce7" : row.firstDueSoon3 ? "#fee2e2" : row.firstDueSoon5 ? "#fef3c7" : row.firstThisMonth ? "#dbeafe" : "#f1f5f9", color: row.answered ? "#166534" : row.firstDueSoon3 ? "#991b1b" : row.firstDueSoon5 ? "#92400e" : row.firstThisMonth ? "#1d4ed8" : "var(--g66-muted)" }}>
                           {status}
                         </span>
                       </td>
