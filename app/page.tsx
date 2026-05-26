@@ -398,11 +398,6 @@ export default function Home() {
             <option value="">Todas las áreas</option>
             {areas.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
-          {(search || filterActivo || filterPais || filterArea) && (
-            <button className="g66-btn-ghost" style={{ padding: "8px 14px", whiteSpace: "nowrap" }} onClick={() => { setSearch(""); setFilterActivo(""); setFilterPais(""); setFilterArea(""); setPage(1); }}>
-              ✕ Limpiar
-            </button>
-          )}
           <button
             onClick={() => setHideSalaries(v => !v)}
             style={{
