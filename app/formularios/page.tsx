@@ -24,6 +24,13 @@ const cards = [
     action: "Abrir módulo",
     external: false,
   },
+  {
+    title: "Formulario feedback",
+    description: "Formulario interno de feedback.",
+    href: "/formulario-feedback",
+    action: "Abrir formulario",
+    external: false,
+  },
 ];
 
 export default function FormulariosPage() {
