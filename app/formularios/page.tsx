@@ -17,6 +17,13 @@ const cards = [
     action: "Ver status",
     external: false,
   },
+  {
+    title: "Licencias médicas",
+    description: "Módulo para gestión y revisión de licencias médicas.",
+    href: "/licencias-medicas",
+    action: "Abrir módulo",
+    external: false,
+  },
 ];
 
 export default function FormulariosPage() {

@@ -319,11 +319,6 @@ export default function Home() {
                     onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
                     Asistencia
                   </a>
-                  <a href="/licencias-medicas" style={{ display: "block", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", textDecoration: "none", borderBottom: "1px solid var(--g66-border)" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
-                    ⚙️ Licencias Médicas
-                  </a>
                   <a href="/formularios" style={{ display: "block", padding: "12px 18px", fontSize: 14, fontWeight: 500, color: "var(--g66-text)", textDecoration: "none", borderBottom: "1px solid var(--g66-border)" }}
                     onMouseEnter={e => (e.currentTarget.style.background = "#f5f6fa")}
                     onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
