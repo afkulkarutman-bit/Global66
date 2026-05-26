@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
+import HeaderNavArrows from "@/components/HeaderNavArrows";
 
 type Employee = {
   id: number;
@@ -164,22 +166,19 @@ export default function ContratosPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#e8ecf4', fontFamily: "'Segoe UI', Arial, sans-serif" }}>
       {/* Header */}
-      <header style={{
-        background: '#1A3DF5', padding: '0 28px',
-        display: 'flex', alignItems: 'center', gap: 14, height: 52,
-      }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.jpg" alt="Global66" style={{ height: 36, borderRadius: 6 }} />
-        <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.3)' }} />
-        <span style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>BOOK</span>
-        <div style={{ flex: 1 }} />
-        <a href="/" style={{
-          color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: 500,
-          textDecoration: 'none', background: 'rgba(255,255,255,0.12)',
-          padding: '6px 14px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)',
-        }}>
-          ← Volver a Empleados
-        </a>
+      <header style={{ background: "var(--g66-blue)", padding: "0 24px", position: "sticky", top: 0, zIndex: 50, boxShadow: "0 2px 8px rgba(59,62,219,0.25)" }}>
+        <div style={{ maxWidth: 1400, margin: "0 auto", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <Link href="/">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.jpg" alt="Global66" style={{ height: 36, borderRadius: 6, cursor: "pointer", display: "block" }} />
+            </Link>
+            <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.3)" }} />
+            <span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>BOOK</span>
+            <span style={{ background: "#fff", color: "var(--g66-blue)", borderRadius: 8, padding: "8px 14px", fontWeight: 800, fontSize: 13 }}>Contratos</span>
+          </div>
+          <HeaderNavArrows />
+        </div>
       </header>
 
       {/* Layout */}

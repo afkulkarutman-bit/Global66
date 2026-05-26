@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import HeaderNavArrows from "@/components/HeaderNavArrows";
 
 const cards = [
   {
@@ -57,9 +58,7 @@ export default function FormulariosPage() {
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>BOOK</span>
             <span style={{ background: "#fff", color: "var(--g66-blue)", borderRadius: 8, padding: "8px 14px", fontWeight: 800, fontSize: 13 }}>Formularios</span>
           </div>
-          <Link href="/" style={{ background: "rgba(255,255,255,0.12)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 8, padding: "9px 16px", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>
-            Empleados
-          </Link>
+          <HeaderNavArrows />
         </div>
       </header>
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import HeaderNavArrows from "@/components/HeaderNavArrows";
 
 type EmployeeOption = {
   id: number;
@@ -250,9 +251,7 @@ export default function FormularioFeedbackPage() {
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>BOOK</span>
             <span style={{ background: "#fff", color: "var(--g66-blue)", borderRadius: 8, padding: "8px 14px", fontWeight: 800, fontSize: 13 }}>Formulario feedback</span>
           </div>
-          <Link href="/formularios" style={{ background: "rgba(255,255,255,0.12)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 8, padding: "9px 16px", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>
-            Formularios
-          </Link>
+          <HeaderNavArrows />
         </div>
       </header>
       <main style={{ maxWidth: 980, margin: "0 auto", padding: "32px 24px 56px" }}>

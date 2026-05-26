@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import HeaderNavArrows from "@/components/HeaderNavArrows";
 
 type OnboardingResponse = Record<string, unknown> & {
   id?: string;
@@ -234,19 +235,17 @@ export default function RespuestaFormularioPage() {
 
   return (
     <main style={{ minHeight: "100vh", background: "#f5f6fa", color: "var(--g66-text)" }}>
-      <header style={{ background: "var(--g66-blue)", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.jpg" alt="Global66" style={{ height: 34, borderRadius: 6, display: "block" }} />
-          <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.35)" }} />
-          <div>
-            <h1 style={{ color: "#fff", fontSize: 20, fontWeight: 900, margin: 0 }}>Respuesta formulario</h1>
-            <div style={{ color: "rgba(255,255,255,0.72)", fontSize: 12, marginTop: 2 }}>Onboarding Global66</div>
+      <header style={{ background: "var(--g66-blue)", padding: "0 24px", position: "sticky", top: 0, zIndex: 50, boxShadow: "0 2px 8px rgba(59,62,219,0.25)" }}>
+        <div style={{ maxWidth: 1400, margin: "0 auto", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.jpg" alt="Global66" style={{ height: 36, borderRadius: 6, display: "block" }} />
+            <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.3)" }} />
+            <span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>BOOK</span>
+            <span style={{ background: "#fff", color: "var(--g66-blue)", borderRadius: 8, padding: "8px 14px", fontWeight: 800, fontSize: 13 }}>Respuesta formulario</span>
           </div>
+          <HeaderNavArrows />
         </div>
-        <a href="/" style={{ color: "#fff", textDecoration: "none", fontSize: 13, fontWeight: 800, border: "1px solid rgba(255,255,255,0.35)", borderRadius: 8, padding: "8px 12px" }}>
-          Base maestra
-        </a>
       </header>
 
       <div style={{ padding: 24, display: "grid", gridTemplateColumns: "340px minmax(0, 1fr)", gap: 20 }}>

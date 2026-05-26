@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import HeaderNavArrows from "@/components/HeaderNavArrows";
 
 export default function LicenciasMedicasPage() {
   return (
@@ -15,9 +16,7 @@ export default function LicenciasMedicasPage() {
             <div style={{ width: 1, height: 32, background: "rgba(255,255,255,0.25)" }} />
             <h1 style={{ color: "#fff", fontSize: 20, fontWeight: 800, margin: 0 }}>Licencias Médicas</h1>
           </div>
-          <Link href="/" style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.8)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, padding: "9px 16px", fontWeight: 600, fontSize: 13, textDecoration: "none" }}>
-            Empleados
-          </Link>
+          <HeaderNavArrows />
         </div>
       </header>
     </div>
