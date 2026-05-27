@@ -79,9 +79,9 @@ export default function CalculadoraFechasPage() {
         ].some(value => String(value ?? "").toLowerCase().includes(q));
       })
       .sort((a, b) => {
-        const aTime = a.primerFeedback?.getTime() ?? Number.MAX_SAFE_INTEGER;
-        const bTime = b.primerFeedback?.getTime() ?? Number.MAX_SAFE_INTEGER;
-        return aTime - bTime || a.employee.nombre.localeCompare(b.employee.nombre, "es");
+        const aTime = a.ingreso?.getTime() ?? 0;
+        const bTime = b.ingreso?.getTime() ?? 0;
+        return bTime - aTime || a.employee.nombre.localeCompare(b.employee.nombre, "es");
       });
   }, [employees, search]);
 

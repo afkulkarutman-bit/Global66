@@ -307,7 +307,7 @@ export default function ReporteFeedbackPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr style={{ background: "#f8fafc", color: "var(--g66-muted)" }}>
-                  {["Persona", "Mail", "País", "1° feedback", "Estado 1°", "Aprueba", "Contrato", "2° feedback", "3° feedback"].map(header => (
+                  {["Persona", "Mail", "País", "F. ingreso", "1° feedback", "Estado 1°", "Aprueba", "Contrato", "2° feedback", "3° feedback"].map(header => (
                     <th key={header} style={{ padding: "10px 11px", textAlign: "left", borderBottom: "1px solid var(--g66-border)", fontWeight: 900, whiteSpace: "nowrap" }}>{header}</th>
                   ))}
                 </tr>
@@ -315,11 +315,11 @@ export default function ReporteFeedbackPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={9} style={{ padding: 18, color: "var(--g66-muted)", textAlign: "center" }}>Cargando...</td>
+                    <td colSpan={10} style={{ padding: 18, color: "var(--g66-muted)", textAlign: "center" }}>Cargando...</td>
                   </tr>
                 ) : report.rows.length === 0 ? (
                   <tr>
-                    <td colSpan={9} style={{ padding: 18, color: "var(--g66-muted)", textAlign: "center" }}>Sin resultados</td>
+                    <td colSpan={10} style={{ padding: 18, color: "var(--g66-muted)", textAlign: "center" }}>Sin resultados</td>
                   </tr>
                 ) : report.rows.map(row => {
                   const status = row.answeredThisMonthForEmployee ? "Respondido este mes" : row.answered ? "Respondido" : row.firstDueSoon3 ? "Pendiente 3 días" : row.firstDueSoon5 ? "Pendiente 5 días" : row.firstThisMonth ? "Enviar este mes" : "Sin acción";
@@ -331,6 +331,7 @@ export default function ReporteFeedbackPage() {
                       </td>
                       <td style={{ padding: "10px 11px", color: "var(--g66-muted)", minWidth: 220 }}>{primaryEmail(row.employee) || "-"}</td>
                       <td style={{ padding: "10px 11px", color: "var(--g66-muted)", whiteSpace: "nowrap" }}>{row.employee.pais ?? "-"}</td>
+                      <td style={{ padding: "10px 11px", whiteSpace: "nowrap", fontWeight: 800 }}>{formatDate(row.ingreso)}</td>
                       <td style={{ padding: "10px 11px", whiteSpace: "nowrap", fontWeight: 800 }}>{formatDate(row.primerFeedback)}</td>
                       <td style={{ padding: "10px 11px", whiteSpace: "nowrap" }}>
                         <span style={{ borderRadius: 999, padding: "4px 8px", fontWeight: 900, background: row.answered ? "#dcfce7" : row.firstDueSoon3 ? "#fee2e2" : row.firstDueSoon5 ? "#fef3c7" : row.firstThisMonth ? "#dbeafe" : "#f1f5f9", color: row.answered ? "#166534" : row.firstDueSoon3 ? "#991b1b" : row.firstDueSoon5 ? "#92400e" : row.firstThisMonth ? "#1d4ed8" : "var(--g66-muted)" }}>
