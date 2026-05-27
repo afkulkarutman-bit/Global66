@@ -131,9 +131,9 @@ export default function ReporteFeedbackPage() {
     const rows = employees
       .map(employee => {
         const ingreso = parseDate(employee.fecha_ingreso);
-        const primerFeedback = ingreso ? addDays(ingreso, 90) : null;
         const b2b = isB2B(employee);
-        const segundoFeedback = primerFeedback ? addMonthsAndHalf(primerFeedback, b2b ? 3 : 2) : null;
+        const primerFeedback = ingreso ? addMonthsAndHalf(ingreso, 1) : null;
+        const segundoFeedback = ingreso ? addMonthsAndHalf(ingreso, b2b ? 3 : 2) : null;
         const tercerFeedback = ingreso && b2b ? addMonthsAndHalf(ingreso, 5) : null;
         return { employee, ingreso, primerFeedback, segundoFeedback, tercerFeedback, b2b };
       })
